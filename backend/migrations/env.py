@@ -9,6 +9,7 @@ from alembic import context
 
 from app.core.config import settings
 from app.db.base import Base
+import app.models  # noqa: F401 — register models for autogenerate
 
 config = context.config
 
@@ -31,7 +32,7 @@ def run_migrations_offline() -> None:
 
     """
     context.configure(
-        url=settings.DATABASE_URL_DIRECT,
+        url=settings.database_url_direct_async,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -54,7 +55,7 @@ async def run_async_migrations() -> None:
 
     """
     connectable = create_async_engine(
-        settings.DATABASE_URL_DIRECT,
+        settings.database_url_direct_async,
         poolclass=pool.NullPool,
     )
 
