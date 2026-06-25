@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     @property
+    def asyncpg_connect_args(self) -> dict:
+        """Supabase transaction pooler (pgbouncer) does not support prepared statements."""
+        return {
+            "ssl": "require",
+            "statement_cache_size": 0,
+        }
+
+    @property
     def supabase_project_ref(self) -> str:
         host = urlparse(self.SUPABASE_URL).hostname or ""
         if host.endswith(".supabase.co"):

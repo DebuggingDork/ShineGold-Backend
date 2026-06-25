@@ -6,7 +6,7 @@ engine = create_async_engine(
     settings.database_url_async,
     pool_pre_ping=True,
     echo=settings.ENVIRONMENT == "development",
-    connect_args={"ssl": "require"},
+    connect_args=settings.asyncpg_connect_args,
 )
 
 AsyncSessionLocal = async_sessionmaker(
