@@ -1,8 +1,8 @@
 # Bug: `seed_admin` fails — passlib incompatible with bcrypt 5.x
 
 **Date:** 2026-06-25  
-**Area:** `app/core/security.py`, `pyproject.toml`, `app/seed_admin.py`  
-**Symptom:** `uv run python -m app.seed_admin` crashes while hashing the default admin password.
+**Area:** `app/core/security.py`, `pyproject.toml`, `scripts/seed_admin.py`  
+**Symptom:** `uv run python scripts/seed_admin.py` crashes while hashing the default admin password.
 
 ## What went wrong
 
@@ -49,7 +49,7 @@ This surfaces during passlib's internal `detect_wrap_bug` self-test, not because
 cd backend
 uv sync
 uv run python -c "from app.core.security import hash_password, verify_password; h = hash_password('ChangeMe123!'); assert verify_password('ChangeMe123!', h)"
-uv run python -m app.seed_admin
+uv run python scripts/seed_admin.py
 ```
 
 All commands should complete without errors.
