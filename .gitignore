@@ -24,13 +24,13 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Virtual environments
+# --- Virtual environments (uv & standard) ---
 .venv/
 venv/
 env/
 ENV/
 
-# Testing & coverage
+# --- Testing & coverage ---
 .pytest_cache/
 .coverage
 .coverage.*
@@ -42,7 +42,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 
-# Type checkers & linters
+# --- Type checkers & linters ---
 .mypy_cache/
 .dmypy.json
 dmypy.json
@@ -85,21 +85,3 @@ static/collected/
 
 # --- Alembic (keep migrations; ignore local scratch) ---
 alembic/versions/*.pyc
-
-# --- Flutter (mobile client, per ShineGold spec) ---
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.packages
-.pub-cache/
-.pub/
-build/
-**/ios/Pods/
-**/ios/.symlinks/
-**/ios/Flutter/Flutter.framework
-**/ios/Flutter/Flutter.podspec
-**/android/.gradle/
-**/android/local.properties
-**/android/**/GeneratedPluginRegistrant.java
-**/android/key.properties
-*.jks
