@@ -21,5 +21,13 @@ class Settings(BaseSettings):
 
     ENVIRONMENT: str = "development"
 
+    @property
+    def database_url_direct_async(self) -> str:
+        """Ensure the direct URL uses asyncpg (Supabase often provides postgresql://)."""
+        url = self.DATABASE_URL_DIRECT
+        if url.startswith("postgresql://"):
+            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
 
 settings = Settings()
