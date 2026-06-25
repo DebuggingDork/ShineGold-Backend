@@ -1,4 +1,7 @@
+from urllib.parse import unquote, urlparse
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import URL
 
 
 class Settings(BaseSettings):
@@ -7,6 +10,8 @@ class Settings(BaseSettings):
     # Supabase Postgres
     DATABASE_URL: str
     DATABASE_URL_DIRECT: str
+    SUPABASE_DB_REGION: str = "ap-south-1"
+    SUPABASE_POOLER_PREFIX: str = "aws-1"
 
     # Supabase Storage
     SUPABASE_URL: str
@@ -22,8 +27,56 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     @property
+    def supabase_project_ref(self) -> str:
+        host = urlparse(self.SUPABASE_URL).hostname or ""
+        if host.endswith(".supabase.co"):
+            return host.removesuffix(".supabase.co")
+        return host
+
+    def _pooler_async_url(self, source_url: str, port: int) -> str:
+        """Supabase pooler host ({prefix}-REGION.pooler.supabase.com) resolves over IPv4."""
+        parsed = urlparse(source_url)
+        ref = self.supabase_project_ref
+        host = f"{self.SUPABASE_POOLER_PREFIX}-{self.SUPABASE_DB_REGION}.pooler.supabase.com"
+        return URL.create(
+            drivername="postgresql+asyncpg",
+            username=f"postgres.{ref}",
+            password=unquote(parsed.password or ""),
+            host=host,
+            port=port,
+            database="postgres",
+        ).render_as_string(hide_password=False)
+
+    def _needs_pooler_fixup(self, hostname: str | None) -> bool:
+        if not hostname:
+            return False
+        if hostname.endswith(".pooler.supabase.com") and not hostname.startswith(
+            ("aws-0-", "aws-1-")
+        ):
+            return True
+        return hostname.startswith("db.")
+
+    @property
+    def database_url_async(self) -> str:
+        """Runtime URL: transaction pooler (port 6543)."""
+        parsed = urlparse(self.DATABASE_URL)
+        if self._needs_pooler_fixup(parsed.hostname) or parsed.username == "postgres":
+            return self._pooler_async_url(self.DATABASE_URL, parsed.port or 6543)
+        url = self.DATABASE_URL
+        if url.startswith("postgresql://"):
+            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
+    @property
     def database_url_direct_async(self) -> str:
-        """Ensure the direct URL uses asyncpg (Supabase often provides postgresql://)."""
+        """Migration URL: session pooler (port 5432).
+
+        db.<ref>.supabase.co is often IPv6-only; Windows/Python DNS frequently
+        cannot resolve it. Session pooler on the regional host works for Alembic.
+        """
+        parsed = urlparse(self.DATABASE_URL_DIRECT)
+        if self._needs_pooler_fixup(parsed.hostname):
+            return self._pooler_async_url(self.DATABASE_URL_DIRECT, 5432)
         url = self.DATABASE_URL_DIRECT
         if url.startswith("postgresql://"):
             return url.replace("postgresql://", "postgresql+asyncpg://", 1)
