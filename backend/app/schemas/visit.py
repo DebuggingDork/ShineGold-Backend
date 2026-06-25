@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import VisitStatus
 
@@ -24,8 +24,25 @@ class McqAnswerIn(BaseModel):
     answer: str
 
 
+class VisitPhotoIn(BaseModel):
+    photo_url: str
+    captured_lat: float
+    captured_lng: float
+    captured_at: datetime
+
+
+class VisitPhotoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    photo_url: str
+    captured_lat: float
+    captured_lng: float
+    captured_at: datetime
+
+
 class VisitFormUpdate(BaseModel):
-    photos: list[str] | None = None
+    photos: list[VisitPhotoIn] | None = None
     voice_note_url: str | None = None
     text_note: str | None = None
     mcq_answers: list[McqAnswerIn] | None = None

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +22,8 @@ class User(Base):
 
     profile_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    home_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    home_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
     mobile_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

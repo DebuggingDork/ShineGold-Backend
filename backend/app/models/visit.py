@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,12 +51,16 @@ class VisitPhoto(Base):
     )
     visit_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("visits.id"), nullable=False)
     photo_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    captured_lat: Mapped[float] = mapped_column(Float, nullable=False)
+    captured_lng: Mapped[float] = mapped_column(Float, nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     visit = relationship("Visit", back_populates="photos")
 
 
 class VisitMcqAnswer(Base):
     __tablename__ = "visit_mcq_answers"
+    __table_args__ = (UniqueConstraint("visit_id", "question_key", name="uq_visit_mcq_answers_visit_question"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

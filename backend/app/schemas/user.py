@@ -29,6 +29,8 @@ class UserOut(BaseModel):
     role: UserRole
     profile_photo_url: str | None = None
     address: str | None = None
+    home_lat: float | None = None
+    home_lng: float | None = None
     mobile_number: str | None = None
     is_blocked: bool
 
@@ -36,6 +38,8 @@ class UserOut(BaseModel):
 class UserUpdateMe(BaseModel):
     name: str | None = None
     address: str | None = None
+    home_lat: float | None = None
+    home_lng: float | None = None
     mobile_number: str | None = None
     profile_photo_url: str | None = None
 
