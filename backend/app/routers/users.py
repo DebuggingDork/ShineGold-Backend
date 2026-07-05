@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db, require_super_admin
-from app.core.security import hash_password
-from app.models.enums import UserRole
+from app.core.http import raise_bad_request, raise_not_found
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.user import (
+    UserBlockOut,
+    UserBlockUpdate,
     UserCreate,
     UserCreateOut,
     UserDetailOut,
@@ -17,6 +18,7 @@ from app.schemas.user import (
     UserMeOut,
     UserUpdateMe,
 )
+from app.services.user_service import UserService, UserServiceError
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
@@ -27,29 +29,12 @@ async def create_user(
     _current_user: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    if payload.role != UserRole.EXECUTIVE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only executive accounts can be created via this endpoint",
-        )
-
-    user_repo = UserRepository(db)
-    existing = await user_repo.get_by_employee_id(payload.employee_id)
-    if existing is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this employee ID already exists",
-        )
-
-    user = User(
-        employee_id=payload.employee_id,
-        name=payload.name,
-        password_hash=hash_password(payload.password),
-        role=UserRole.EXECUTIVE,
-        mobile_number=payload.mobile_number,
-    )
-    created = await user_repo.create(user)
-    await db.commit()
+    user_service = UserService(db)
+    try:
+        created = await user_service.create_executive(payload)
+        await db.commit()
+    except UserServiceError as e:
+        raise_bad_request(str(e))
 
     return UserCreateOut(
         id=created.id,
@@ -93,20 +78,6 @@ async def read_current_user(
     return UserMeOut.model_validate(current_user).model_copy(update={"stats": stats})
 
 
-@router.get("/{user_id}", response_model=UserDetailOut)
-async def get_user(
-    user_id: uuid.UUID,
-    _current_user: User = Depends(require_super_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    user_repo = UserRepository(db)
-    detail = await user_repo.get_executive_detail(user_id)
-    if detail is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Executive not found")
-
-    return detail
-
-
 @router.patch("/me", response_model=UserMeOut)
 async def update_current_user(
     payload: UserUpdateMe,
@@ -123,3 +94,33 @@ async def update_current_user(
 
     stats = await user_repo.get_user_stats(current_user.id)
     return UserMeOut.model_validate(current_user).model_copy(update={"stats": stats})
+
+
+@router.get("/{user_id}", response_model=UserDetailOut)
+async def get_user(
+    user_id: uuid.UUID,
+    _current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    user_repo = UserRepository(db)
+    detail = await user_repo.get_executive_detail(user_id)
+    if detail is None:
+        raise_not_found("Executive not found")
+    return detail
+
+
+@router.patch("/{user_id}/block", response_model=UserBlockOut)
+async def block_user(
+    user_id: uuid.UUID,
+    payload: UserBlockUpdate,
+    _current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    user_service = UserService(db)
+    try:
+        executive = await user_service.set_blocked(user_id, payload.is_blocked)
+        await db.commit()
+    except UserServiceError as e:
+        raise_not_found(str(e))
+
+    return UserBlockOut(id=executive.id, is_blocked=executive.is_blocked)
