@@ -1,9 +1,13 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.enums import VisitStatus
+from app.models.farm import Farm
 from app.models.user import User
+from app.models.visit import Visit
+from app.schemas.user import UserStats
 
 
 class UserRepository:
@@ -57,3 +61,17 @@ class UserRepository:
         await self.db.flush()
         await self.db.refresh(user)
         return user
+
+    async def get_user_stats(self, user_id: uuid.UUID) -> UserStats:
+        visits_result = await self.db.execute(
+            select(func.count())
+            .select_from(Visit)
+            .where(Visit.executive_id == user_id, Visit.status == VisitStatus.COMPLETED)
+        )
+        farms_result = await self.db.execute(
+            select(func.count()).select_from(Farm).where(Farm.onboarded_by == user_id)
+        )
+        return UserStats(
+            total_farms_visited=visits_result.scalar_one(),
+            onboarding_farms_count=farms_result.scalar_one(),
+        )

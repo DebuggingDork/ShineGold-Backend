@@ -71,9 +71,3 @@ async def change_password(
 
     await db.commit()
     return {"message": "Password updated successfully"}
-
-
-@router.get("/me", response_model=UserOut)
-async def read_current_user(current_user: User = Depends(get_current_user)):
-    """Protected test route — proves JWT auth works end-to-end."""
-    return UserOut.model_validate(current_user)
