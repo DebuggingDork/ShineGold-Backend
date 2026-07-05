@@ -55,3 +55,14 @@ class UserStats(BaseModel):
 
 class UserMeOut(UserOut):
     stats: UserStats
+
+
+class UserListItem(BaseModel):
+    id: uuid.UUID
+    employee_id: str
+    name: str
+    profile_photo_url: str | None = None
+    mobile_number: str | None = None
+    is_blocked: bool
+    total_farms_visited: int
+    farms_assigned_count: int
