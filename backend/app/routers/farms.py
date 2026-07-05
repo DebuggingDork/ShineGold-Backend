@@ -5,10 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db, require_executive, require_super_admin
-from app.models.enums import FarmStatus, UserRole
+from app.core.http import raise_bad_request, raise_not_found
+from app.models.enums import FarmStatus
 from app.models.user import User
 from app.repositories.farm_repository import FarmRepository
-from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.farm import (
     FarmAssignOut,
@@ -19,6 +19,7 @@ from app.schemas.farm import (
     FarmListItem,
     FarmUpdate,
 )
+from app.services.user_service import UserService, UserServiceError
 
 router = APIRouter(prefix="/api/v1/farms", tags=["farms"])
 
@@ -115,19 +116,11 @@ async def update_farm(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
 
     if "assigned_executive_id" in update_data:
-        executive_id = update_data["assigned_executive_id"]
-        user_repo = UserRepository(db)
-        executive = await user_repo.get_by_id(executive_id)
-        if executive is None or executive.role != UserRole.EXECUTIVE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="assigned_executive_id must reference an existing executive",
-            )
-        if executive.is_blocked:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot assign a blocked executive",
-            )
+        user_service = UserService(db)
+        try:
+            await user_service.get_assignable_executive(update_data["assigned_executive_id"])
+        except UserServiceError as e:
+            raise_bad_request(str(e))
 
     await farm_repo.update(farm, **update_data)
     await db.commit()
@@ -146,20 +139,13 @@ async def assign_farm_executive(
     farm_repo = FarmRepository(db)
     farm = await farm_repo.get_by_id(farm_id)
     if farm is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
+        raise_not_found("Farm not found")
 
-    user_repo = UserRepository(db)
-    executive = await user_repo.get_by_id(payload.executive_id)
-    if executive is None or executive.role != UserRole.EXECUTIVE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="executive_id must reference an existing executive",
-        )
-    if executive.is_blocked:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot assign a blocked executive",
-        )
+    user_service = UserService(db)
+    try:
+        await user_service.get_assignable_executive(payload.executive_id)
+    except UserServiceError as e:
+        raise_bad_request(str(e))
 
     await farm_repo.update(farm, assigned_executive_id=payload.executive_id)
     await db.commit()
