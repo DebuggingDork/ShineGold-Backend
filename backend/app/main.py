@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routers import auth, farmers, farms, uploads, users, visits
+from app.routers import auth, dashboard, farmers, farms, harvests, uploads, users, visits
 
 app = FastAPI(title="ShineGold API", version="0.1.0")
 
@@ -10,6 +10,8 @@ app.include_router(uploads.router)
 app.include_router(farms.router)
 app.include_router(visits.router)
 app.include_router(farmers.router)
+app.include_router(harvests.router)
+app.include_router(dashboard.router)
 
 
 @app.get("/health")
