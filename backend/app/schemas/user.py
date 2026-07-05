@@ -102,3 +102,34 @@ class UserDetailOut(BaseModel):
     is_blocked: bool
     visit_history: list[UserVisitHistoryItem] = []
     assigned_farms: list[UserAssignedFarmItem] = []
+
+
+class FarmTransferRequest(BaseModel):
+    to_executive_id: uuid.UUID
+
+
+class FarmTransferOut(BaseModel):
+    from_executive_id: uuid.UUID
+    to_executive_id: uuid.UUID
+    farms_transferred: int
+    farm_ids: list[uuid.UUID]
+
+
+class BulkImportRowError(BaseModel):
+    row: int
+    employee_id: str | None = None
+    reason: str
+
+
+class BulkImportedUser(BaseModel):
+    id: uuid.UUID
+    employee_id: str
+    name: str
+    default_password: str
+
+
+class BulkImportOut(BaseModel):
+    created: int
+    skipped: int
+    errors: list[BulkImportRowError]
+    users: list[BulkImportedUser]
