@@ -75,3 +75,43 @@ class UserRepository:
             total_farms_visited=visits_result.scalar_one(),
             onboarding_farms_count=farms_result.scalar_one(),
         )
+
+    async def count_assigned_farms(self, executive_id: uuid.UUID) -> int:
+        result = await self.db.execute(
+            select(func.count())
+            .select_from(Farm)
+            .where(Farm.assigned_executive_id == executive_id)
+        )
+        return result.scalar_one()
+
+    async def list_executive_items(
+        self,
+        *,
+        search: str | None = None,
+        is_blocked: bool | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict], int]:
+        executives, total = await self.list_executives(
+            search=search,
+            is_blocked=is_blocked,
+            page=page,
+            page_size=page_size,
+        )
+        items = []
+        for executive in executives:
+            stats = await self.get_user_stats(executive.id)
+            assigned_count = await self.count_assigned_farms(executive.id)
+            items.append(
+                {
+                    "id": executive.id,
+                    "employee_id": executive.employee_id,
+                    "name": executive.name,
+                    "profile_photo_url": executive.profile_photo_url,
+                    "mobile_number": executive.mobile_number,
+                    "is_blocked": executive.is_blocked,
+                    "total_farms_visited": stats.total_farms_visited,
+                    "farms_assigned_count": assigned_count,
+                }
+            )
+        return items, total
