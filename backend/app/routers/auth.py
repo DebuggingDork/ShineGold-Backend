@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db, require_super_admin
 from app.core.http import raise_bad_request, raise_conflict, raise_not_found
+from app.core.user_helpers import requires_location_setup
 from app.models.enums import PasswordResetStatus
 from app.models.user import User
 from app.schemas.auth import (
@@ -41,7 +42,9 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
-        user=UserOut.model_validate(user),
+        user=UserOut.model_validate(user).model_copy(
+            update={"requires_location_setup": requires_location_setup(user)}
+        ),
     )
 
 

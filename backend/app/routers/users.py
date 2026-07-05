@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_db, require_super_admin
+from app.core.dependencies import get_current_user, get_db, require_executive, require_super_admin
 from app.core.http import raise_bad_request, raise_not_found
+from app.core.user_helpers import requires_location_setup
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse
@@ -19,6 +20,7 @@ from app.schemas.user import (
     UserCreateOut,
     UserDetailOut,
     UserListItem,
+    UserLocationSetup,
     UserMeOut,
     UserUpdateMe,
 )
@@ -26,6 +28,15 @@ from app.services.bulk_import_service import BulkImportError, BulkImportService
 from app.services.user_service import UserService, UserServiceError
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
+
+
+def _build_user_me_out(user: User, stats) -> UserMeOut:
+    return UserMeOut.model_validate(user).model_copy(
+        update={
+            "stats": stats,
+            "requires_location_setup": requires_location_setup(user),
+        }
+    )
 
 
 @router.post("", response_model=UserCreateOut, status_code=status.HTTP_201_CREATED)
@@ -117,7 +128,30 @@ async def read_current_user(
 ):
     user_repo = UserRepository(db)
     stats = await user_repo.get_user_stats(current_user.id)
-    return UserMeOut.model_validate(current_user).model_copy(update={"stats": stats})
+    return _build_user_me_out(current_user, stats)
+
+
+@router.post("/me/setup-location", response_model=UserMeOut)
+async def setup_home_location(
+    payload: UserLocationSetup,
+    current_user: User = Depends(require_executive),
+    db: AsyncSession = Depends(get_db),
+):
+    user_service = UserService(db)
+    try:
+        updated = await user_service.setup_home_location(
+            current_user,
+            home_lat=payload.home_lat,
+            home_lng=payload.home_lng,
+            address=payload.address,
+        )
+        await db.commit()
+    except UserServiceError as e:
+        raise_bad_request(str(e))
+
+    user_repo = UserRepository(db)
+    stats = await user_repo.get_user_stats(updated.id)
+    return _build_user_me_out(updated, stats)
 
 
 @router.patch("/me", response_model=UserMeOut)
@@ -135,7 +169,7 @@ async def update_current_user(
     await db.commit()
 
     stats = await user_repo.get_user_stats(current_user.id)
-    return UserMeOut.model_validate(current_user).model_copy(update={"stats": stats})
+    return _build_user_me_out(current_user, stats)
 
 
 @router.get("/{user_id}", response_model=UserDetailOut)
