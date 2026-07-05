@@ -67,6 +67,11 @@ class FarmAssignUpdate(BaseModel):
     executive_id: uuid.UUID
 
 
+class FarmAssignOut(BaseModel):
+    farm_id: uuid.UUID
+    assigned_executive_id: uuid.UUID
+
+
 class FarmLocation(BaseModel):
     lat: float
     lng: float
