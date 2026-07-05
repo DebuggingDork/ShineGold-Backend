@@ -15,6 +15,7 @@ class UserBase(BaseModel):
 class UserCreate(BaseModel):
     employee_id: str
     name: str
+    address: str
     password: str
     mobile_number: str | None = None
     role: UserRole = UserRole.EXECUTIVE
@@ -40,6 +41,7 @@ class UserOut(BaseModel):
     home_lng: float | None = None
     mobile_number: str | None = None
     is_blocked: bool
+    requires_location_setup: bool = False
 
 
 class UserUpdateMe(BaseModel):
@@ -67,6 +69,12 @@ class UserStats(BaseModel):
 
 class UserMeOut(UserOut):
     stats: UserStats
+
+
+class UserLocationSetup(BaseModel):
+    home_lat: float
+    home_lng: float
+    address: str | None = None
 
 
 class UserListItem(BaseModel):
