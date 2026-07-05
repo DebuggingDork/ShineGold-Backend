@@ -2,12 +2,18 @@ import uuid
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.models.enums import VisitStatus
+from app.models.enums import UserRole, VisitStatus
 from app.models.farm import Farm
 from app.models.user import User
 from app.models.visit import Visit
-from app.schemas.user import UserStats
+from app.schemas.user import (
+    UserAssignedFarmItem,
+    UserDetailOut,
+    UserStats,
+    UserVisitHistoryItem,
+)
 
 
 class UserRepository:
@@ -115,3 +121,69 @@ class UserRepository:
                 }
             )
         return items, total
+
+    async def get_executive_by_id(self, user_id: uuid.UUID) -> User | None:
+        result = await self.db.execute(
+            select(User).where(User.id == user_id, User.role == UserRole.EXECUTIVE)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_executive_detail(self, user_id: uuid.UUID) -> UserDetailOut | None:
+        executive = await self.get_executive_by_id(user_id)
+        if executive is None:
+            return None
+
+        visits_result = await self.db.execute(
+            select(Visit)
+            .where(Visit.executive_id == user_id)
+            .options(selectinload(Visit.farm))
+            .order_by(Visit.checkin_time.desc())
+        )
+        visits = list(visits_result.scalars().all())
+
+        farms_result = await self.db.execute(
+            select(Farm)
+            .where(Farm.assigned_executive_id == user_id)
+            .order_by(Farm.name.asc())
+        )
+        farms = list(farms_result.scalars().all())
+
+        return UserRepository.to_detail(executive, visits, farms)
+
+    @staticmethod
+    def to_detail(
+        executive: User,
+        visits: list[Visit],
+        farms: list[Farm],
+    ) -> UserDetailOut:
+        visit_history: list[UserVisitHistoryItem] = []
+        for visit in visits:
+            visit_time = visit.checkout_time or visit.checkin_time
+            visit_history.append(
+                UserVisitHistoryItem(
+                    visit_id=visit.id,
+                    farm_name=visit.farm.name,
+                    date=visit_time.date(),
+                    status=visit.status,
+                )
+            )
+
+        assigned_farms = [
+            UserAssignedFarmItem(
+                farm_id=farm.id,
+                farm_name=farm.name,
+                status=farm.status,
+            )
+            for farm in farms
+        ]
+
+        return UserDetailOut(
+            id=executive.id,
+            employee_id=executive.employee_id,
+            name=executive.name,
+            mobile_number=executive.mobile_number,
+            profile_photo_url=executive.profile_photo_url,
+            is_blocked=executive.is_blocked,
+            visit_history=visit_history,
+            assigned_farms=assigned_farms,
+        )
