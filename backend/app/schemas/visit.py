@@ -64,3 +64,40 @@ class VisitSubmitResponse(BaseModel):
     status: VisitStatus
     checkout_time: datetime
     duration_seconds: int
+
+
+class VisitFarmSummary(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class VisitMineItem(BaseModel):
+    visit_id: uuid.UUID
+    farm: VisitFarmSummary
+    status: VisitStatus
+    checkin_time: datetime
+    duration_seconds: int | None = None
+
+
+class McqAnswerOut(BaseModel):
+    question_key: str
+    answer: str
+
+
+class VisitExecutiveSummary(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class VisitDetailOut(BaseModel):
+    visit_id: uuid.UUID
+    farm_id: uuid.UUID
+    status: VisitStatus
+    checkin_time: datetime
+    checkout_time: datetime | None = None
+    duration_seconds: int | None = None
+    text_note: str | None = None
+    photos: list[str] = []
+    voice_note_url: str | None = None
+    mcq_answers: list[McqAnswerOut] = []
+    visited_by: VisitExecutiveSummary
