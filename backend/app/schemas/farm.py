@@ -65,3 +65,45 @@ class FarmListItem(BaseModel):
 
 class FarmAssignUpdate(BaseModel):
     executive_id: uuid.UUID
+
+
+class FarmLocation(BaseModel):
+    lat: float
+    lng: float
+    address: str | None = None
+
+
+class ExecutiveSummary(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class VisitLogItem(BaseModel):
+    visit_id: uuid.UUID
+    date: date
+    duration_seconds: int | None = None
+    report: str | None = None
+    photos: list[str] = []
+    voice_note: str | None = None
+    visited_by: ExecutiveSummary
+
+
+class FarmDetailOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    harvest_type: str
+    harvest_date: date
+    crop: str
+    location: FarmLocation
+    boundary_geojson: dict | None = None
+    total_acres: float
+    assigned_executive: ExecutiveSummary | None = None
+    farmer: FarmerOut | None = None
+    photos: list[str] | None = None
+    status: FarmStatus
+    visit_logs: list[VisitLogItem] = []
+
+
+class FarmUpdate(BaseModel):
+    assigned_executive_id: uuid.UUID | None = None
+    harvest_date: date | None = None
