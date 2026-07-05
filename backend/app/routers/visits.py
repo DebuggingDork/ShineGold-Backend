@@ -1,19 +1,23 @@
+from datetime import date
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_db, require_executive
-from app.models.enums import VisitStatus
+from app.core.dependencies import get_current_user, get_db, require_executive
+from app.models.enums import UserRole, VisitStatus
 from app.models.user import User
 from app.models.visit import Visit
 from app.repositories.farm_repository import FarmRepository
 from app.repositories.visit_repository import VisitRepository
+from app.schemas.common import PaginatedResponse
 from app.schemas.visit import (
     CheckinRequest,
     CheckinResponse,
+    VisitDetailOut,
     VisitFormResponse,
     VisitFormUpdate,
+    VisitMineItem,
     VisitSubmitRequest,
     VisitSubmitResponse,
 )
@@ -70,6 +74,51 @@ async def checkin(
         status=visit.status,
         checkin_time=visit.checkin_time,
     )
+
+
+@router.get("/mine", response_model=PaginatedResponse[VisitMineItem])
+async def list_my_visits(
+    status: VisitStatus | None = Query(None),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    farm_name: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(require_executive),
+    db: AsyncSession = Depends(get_db),
+):
+    visit_repo = VisitRepository(db)
+    visits, total = await visit_repo.list_mine(
+        current_user.id,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
+        farm_name=farm_name,
+        page=page,
+        page_size=page_size,
+    )
+    items = [VisitRepository.to_mine_item(visit) for visit in visits]
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.get("/{visit_id}", response_model=VisitDetailOut)
+async def get_visit(
+    visit_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    visit_repo = VisitRepository(db)
+    visit = await visit_repo.get_by_id(visit_id)
+    if visit is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Visit not found")
+
+    if current_user.role != UserRole.SUPER_ADMIN and visit.executive_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this visit",
+        )
+
+    return VisitRepository.to_detail(visit)
 
 
 @router.patch("/{visit_id}/form", response_model=VisitFormResponse)
