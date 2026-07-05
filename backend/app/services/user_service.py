@@ -31,6 +31,7 @@ class UserService:
         user = User(
             employee_id=payload.employee_id,
             name=payload.name,
+            address=payload.address,
             password_hash=hash_password(payload.password),
             role=UserRole.EXECUTIVE,
             mobile_number=payload.mobile_number,
@@ -70,3 +71,20 @@ class UserService:
             to_executive_id,
         )
         return from_executive_id, to_executive_id, farm_ids
+
+    async def setup_home_location(
+        self,
+        user: User,
+        *,
+        home_lat: float,
+        home_lng: float,
+        address: str | None = None,
+    ) -> User:
+        if user.role != UserRole.EXECUTIVE:
+            raise UserServiceError("Only executives can set a home location")
+
+        user.home_lat = home_lat
+        user.home_lng = home_lng
+        if address is not None:
+            user.address = address
+        return await self.user_repo.update(user)
