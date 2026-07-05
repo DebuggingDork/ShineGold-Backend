@@ -1,18 +1,29 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_db
+from app.core.dependencies import get_current_user, get_db, require_super_admin
+from app.core.http import raise_bad_request, raise_conflict, raise_not_found
+from app.models.enums import PasswordResetStatus
 from app.models.user import User
 from app.schemas.auth import (
+    ApproveResetRequest,
+    ApproveResetResponse,
     ChangePasswordRequest,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LoginRequest,
     LogoutRequest,
+    PasswordResetListItem,
     RefreshRequest,
     RefreshResponse,
     TokenResponse,
 )
+from app.schemas.common import PaginatedResponse
 from app.schemas.user import UserOut
 from app.services.auth_service import AuthError, AuthService
+from app.services.password_reset_service import PasswordResetError, PasswordResetService
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -50,6 +61,69 @@ async def logout(payload: LogoutRequest | None = None):
     # Stateless JWT setup: nothing to invalidate server-side yet.
     # If you later add a token denylist (e.g. in Redis), revoke payload.refresh_token here.
     return {"message": "Logged out successfully"}
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    reset_service = PasswordResetService(db)
+    try:
+        request = await reset_service.request_reset(payload.employee_id)
+        await db.commit()
+    except PasswordResetError as e:
+        message = str(e)
+        if "already pending" in message:
+            raise_conflict(message)
+        if "not found" in message:
+            raise_not_found(message)
+        raise_bad_request(message)
+
+    return ForgotPasswordResponse(
+        message="Reset request submitted. Await admin approval.",
+        request_id=request.id,
+    )
+
+
+@router.get("/password-reset-requests", response_model=PaginatedResponse[PasswordResetListItem])
+async def list_password_reset_requests(
+    status: PasswordResetStatus | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    _current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    reset_service = PasswordResetService(db)
+    items, total = await reset_service.list_requests(
+        status=status,
+        page=page,
+        page_size=page_size,
+    )
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.post(
+    "/password-reset-requests/{request_id}/approve",
+    response_model=ApproveResetResponse,
+)
+async def approve_password_reset(
+    request_id: uuid.UUID,
+    payload: ApproveResetRequest,
+    _current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    reset_service = PasswordResetService(db)
+    try:
+        request = await reset_service.approve(request_id, payload.temp_password)
+        await db.commit()
+    except PasswordResetError as e:
+        message = str(e)
+        if "not found" in message:
+            raise_not_found(message)
+        raise_bad_request(message)
+
+    return ApproveResetResponse(
+        message="Password reset approved",
+        request_id=request.id,
+    )
 
 
 @router.post("/change-password")
