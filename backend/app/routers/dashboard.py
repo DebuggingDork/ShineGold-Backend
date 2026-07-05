@@ -3,10 +3,10 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_db, require_super_admin
+from app.core.dependencies import get_db, require_executive, require_super_admin
 from app.models.user import User
 from app.repositories.dashboard_repository import DashboardRepository
-from app.schemas.dashboard import AdminDashboardOut
+from app.schemas.dashboard import AdminDashboardOut, ExecutiveDashboardOut
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
 
@@ -23,3 +23,12 @@ async def get_admin_dashboard(
         date_from=date_from,
         date_to=date_to,
     )
+
+
+@router.get("/executive", response_model=ExecutiveDashboardOut)
+async def get_executive_dashboard(
+    current_user: User = Depends(require_executive),
+    db: AsyncSession = Depends(get_db),
+):
+    dashboard_repo = DashboardRepository(db)
+    return await dashboard_repo.get_executive_stats(current_user)
