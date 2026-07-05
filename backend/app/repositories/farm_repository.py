@@ -10,7 +10,15 @@ from sqlalchemy.orm import selectinload
 from app.models.enums import FarmStatus, VisitStatus
 from app.models.farm import Farm, Farmer
 from app.models.visit import Visit
-from app.schemas.farm import FarmCreate, FarmerListSummary
+from app.schemas.farm import (
+    ExecutiveSummary,
+    FarmCreate,
+    FarmDetailOut,
+    FarmLocation,
+    FarmerListSummary,
+    FarmerOut,
+    VisitLogItem,
+)
 
 
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -62,6 +70,26 @@ class FarmRepository:
         await self.db.refresh(farm)
         await self.db.refresh(farmer)
         return farm, farmer
+
+    async def get_by_id(self, farm_id: uuid.UUID) -> Farm | None:
+        result = await self.db.execute(
+            select(Farm)
+            .where(Farm.id == farm_id)
+            .options(
+                selectinload(Farm.farmer),
+                selectinload(Farm.assigned_executive),
+                selectinload(Farm.visits).selectinload(Visit.executive),
+                selectinload(Farm.visits).selectinload(Visit.photos),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def update(self, farm: Farm, **fields) -> Farm:
+        for key, value in fields.items():
+            setattr(farm, key, value)
+        await self.db.flush()
+        await self.db.refresh(farm)
+        return farm
 
     async def list_farms(
         self,
@@ -172,3 +200,58 @@ class FarmRepository:
             "last_visited": last_visited,
             "status": farm.status,
         }
+
+    @staticmethod
+    def to_detail(farm: Farm) -> FarmDetailOut:
+        assigned_executive = None
+        if farm.assigned_executive:
+            assigned_executive = ExecutiveSummary(
+                id=farm.assigned_executive.id,
+                name=farm.assigned_executive.name,
+            )
+
+        farmer = FarmerOut.model_validate(farm.farmer) if farm.farmer else None
+
+        visit_logs: list[VisitLogItem] = []
+        completed_visits = [
+            v for v in farm.visits if v.status == VisitStatus.COMPLETED
+        ]
+        completed_visits.sort(
+            key=lambda v: v.checkout_time or v.checkin_time, reverse=True
+        )
+        for visit in completed_visits:
+            visit_date = visit.checkout_time or visit.checkin_time
+            visit_logs.append(
+                VisitLogItem(
+                    visit_id=visit.id,
+                    date=visit_date.date(),
+                    duration_seconds=visit.duration_seconds,
+                    report=visit.text_note,
+                    photos=[photo.photo_url for photo in visit.photos],
+                    voice_note=visit.voice_note_url,
+                    visited_by=ExecutiveSummary(
+                        id=visit.executive.id,
+                        name=visit.executive.name,
+                    ),
+                )
+            )
+
+        return FarmDetailOut(
+            id=farm.id,
+            name=farm.name,
+            harvest_type=farm.harvest_type,
+            harvest_date=farm.harvest_date,
+            crop=farm.crop,
+            location=FarmLocation(
+                lat=farm.location_lat,
+                lng=farm.location_lng,
+                address=farm.location_address,
+            ),
+            boundary_geojson=farm.boundary_geojson,
+            total_acres=farm.total_acres,
+            assigned_executive=assigned_executive,
+            farmer=farmer,
+            photos=farm.photos,
+            status=farm.status,
+            visit_logs=visit_logs,
+        )
