@@ -48,6 +48,12 @@ class VisitFormUpdate(BaseModel):
     mcq_answers: list[McqAnswerIn] | None = None
 
 
+class VisitFormResponse(BaseModel):
+    visit_id: uuid.UUID
+    status: VisitStatus
+    updated_fields: list[str]
+
+
 class VisitSubmitRequest(BaseModel):
     checkout_lat: float
     checkout_lng: float
