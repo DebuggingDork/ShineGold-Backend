@@ -71,12 +71,35 @@ class VisitFarmSummary(BaseModel):
     name: str
 
 
+class VisitExecutiveSummary(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
 class VisitMineItem(BaseModel):
     visit_id: uuid.UUID
     farm: VisitFarmSummary
     status: VisitStatus
     checkin_time: datetime
+    checkout_time: datetime | None = None
     duration_seconds: int | None = None
+    remarks_preview: str | None = None
+    has_voice_note: bool = False
+    photo_count: int = 0
+
+
+class VisitHistoryItem(BaseModel):
+    visit_id: uuid.UUID
+    farm_id: uuid.UUID
+    farm_name: str
+    status: VisitStatus
+    checkin_time: datetime
+    checkout_time: datetime | None = None
+    duration_seconds: int | None = None
+    remarks_preview: str | None = None
+    has_voice_note: bool = False
+    photo_count: int = 0
+    visited_by: VisitExecutiveSummary
 
 
 class McqAnswerOut(BaseModel):
@@ -84,20 +107,18 @@ class McqAnswerOut(BaseModel):
     answer: str
 
 
-class VisitExecutiveSummary(BaseModel):
-    id: uuid.UUID
-    name: str
-
-
 class VisitDetailOut(BaseModel):
     visit_id: uuid.UUID
     farm_id: uuid.UUID
+    farm_name: str
     status: VisitStatus
     checkin_time: datetime
     checkout_time: datetime | None = None
     duration_seconds: int | None = None
     text_note: str | None = None
-    photos: list[str] = []
+    photos: list[VisitPhotoOut] = []
     voice_note_url: str | None = None
     mcq_answers: list[McqAnswerOut] = []
     visited_by: VisitExecutiveSummary
+    has_voice_note: bool = False
+    has_photos: bool = False

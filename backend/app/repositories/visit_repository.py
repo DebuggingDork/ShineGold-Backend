@@ -14,8 +14,19 @@ from app.schemas.visit import (
     VisitExecutiveSummary,
     VisitFarmSummary,
     VisitFormUpdate,
+    VisitHistoryItem,
     VisitMineItem,
+    VisitPhotoOut,
 )
+
+
+def _remarks_preview(text: str | None, limit: int = 120) -> str | None:
+    if not text:
+        return None
+    cleaned = text.strip()
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[:limit].rstrip() + "..."
 
 
 class VisitRepository:
@@ -163,7 +174,7 @@ class VisitRepository:
             select(Visit)
             .join(Farm, Farm.id == Visit.farm_id)
             .where(and_(*filters))
-            .options(selectinload(Visit.farm))
+            .options(selectinload(Visit.farm), selectinload(Visit.photos))
             .order_by(Visit.checkin_time.desc())
         )
         count_query = (
@@ -181,6 +192,58 @@ class VisitRepository:
         )
         return list(result.scalars().unique().all()), total
 
+        return list(result.scalars().unique().all()), total
+
+    async def list_for_farm(
+        self,
+        farm_id: uuid.UUID,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[Visit], int]:
+        filters = [
+            Visit.farm_id == farm_id,
+            Visit.status == VisitStatus.COMPLETED,
+        ]
+        base_query = (
+            select(Visit)
+            .where(and_(*filters))
+            .options(
+                selectinload(Visit.farm),
+                selectinload(Visit.photos),
+                selectinload(Visit.executive),
+            )
+            .order_by(Visit.checkout_time.desc(), Visit.checkin_time.desc())
+        )
+        count_query = (
+            select(func.count())
+            .select_from(Visit)
+            .where(and_(*filters))
+        )
+
+        total_result = await self.db.execute(count_query)
+        total = total_result.scalar_one()
+
+        result = await self.db.execute(
+            base_query.offset((page - 1) * page_size).limit(page_size)
+        )
+        return list(result.scalars().unique().all()), total
+
+    async def get_latest_completed_for_farm(self, farm_id: uuid.UUID) -> Visit | None:
+        result = await self.db.execute(
+            select(Visit)
+            .where(Visit.farm_id == farm_id, Visit.status == VisitStatus.COMPLETED)
+            .options(
+                selectinload(Visit.photos),
+                selectinload(Visit.mcq_answers),
+                selectinload(Visit.farm),
+                selectinload(Visit.executive),
+            )
+            .order_by(Visit.checkout_time.desc(), Visit.checkin_time.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     @staticmethod
     def to_mine_item(visit: Visit) -> VisitMineItem:
         return VisitMineItem(
@@ -188,7 +251,30 @@ class VisitRepository:
             farm=VisitFarmSummary(id=visit.farm.id, name=visit.farm.name),
             status=visit.status,
             checkin_time=visit.checkin_time,
+            checkout_time=visit.checkout_time,
             duration_seconds=visit.duration_seconds,
+            remarks_preview=_remarks_preview(visit.text_note),
+            has_voice_note=bool(visit.voice_note_url),
+            photo_count=len(visit.photos),
+        )
+
+    @staticmethod
+    def to_history_item(visit: Visit) -> VisitHistoryItem:
+        return VisitHistoryItem(
+            visit_id=visit.id,
+            farm_id=visit.farm_id,
+            farm_name=visit.farm.name,
+            status=visit.status,
+            checkin_time=visit.checkin_time,
+            checkout_time=visit.checkout_time,
+            duration_seconds=visit.duration_seconds,
+            remarks_preview=_remarks_preview(visit.text_note),
+            has_voice_note=bool(visit.voice_note_url),
+            photo_count=len(visit.photos),
+            visited_by=VisitExecutiveSummary(
+                id=visit.executive.id,
+                name=visit.executive.name,
+            ),
         )
 
     @staticmethod
@@ -196,12 +282,13 @@ class VisitRepository:
         return VisitDetailOut(
             visit_id=visit.id,
             farm_id=visit.farm_id,
+            farm_name=visit.farm.name,
             status=visit.status,
             checkin_time=visit.checkin_time,
             checkout_time=visit.checkout_time,
             duration_seconds=visit.duration_seconds,
             text_note=visit.text_note,
-            photos=[photo.photo_url for photo in visit.photos],
+            photos=[VisitPhotoOut.model_validate(photo) for photo in visit.photos],
             voice_note_url=visit.voice_note_url,
             mcq_answers=[
                 McqAnswerOut(question_key=answer.question_key, answer=answer.answer)
@@ -211,4 +298,6 @@ class VisitRepository:
                 id=visit.executive.id,
                 name=visit.executive.name,
             ),
+            has_voice_note=bool(visit.voice_note_url),
+            has_photos=bool(visit.photos),
         )
