@@ -1,6 +1,7 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db, require_super_admin
@@ -9,6 +10,9 @@ from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.user import (
+    BulkImportOut,
+    FarmTransferOut,
+    FarmTransferRequest,
     UserBlockOut,
     UserBlockUpdate,
     UserCreate,
@@ -18,6 +22,7 @@ from app.schemas.user import (
     UserMeOut,
     UserUpdateMe,
 )
+from app.services.bulk_import_service import BulkImportError, BulkImportService
 from app.services.user_service import UserService, UserServiceError
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
@@ -42,6 +47,43 @@ async def create_user(
         name=created.name,
         role=created.role,
     )
+
+
+@router.get("/bulk-import/template")
+async def download_bulk_import_template(
+    _current_user: User = Depends(require_super_admin),
+):
+    content = BulkImportService.build_template_bytes()
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="executive_import_template.xlsx"'},
+    )
+
+
+@router.post("/bulk-import", response_model=BulkImportOut, status_code=status.HTTP_201_CREATED)
+async def bulk_import_users(
+    file: UploadFile = File(...),
+    default_password: str = Form(..., min_length=6),
+    _current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    if not file.filename:
+        raise_bad_request("Uploaded file must have a filename")
+
+    content = await file.read()
+    if not content:
+        raise_bad_request("Uploaded file is empty")
+
+    import_service = BulkImportService(db)
+    try:
+        rows = import_service.parse_upload(content, file.filename)
+        result = await import_service.import_executives(rows, default_password)
+        await db.commit()
+    except BulkImportError as e:
+        raise_bad_request(str(e))
+
+    return result
 
 
 @router.get("", response_model=PaginatedResponse[UserListItem])
@@ -124,3 +166,28 @@ async def block_user(
         raise_not_found(str(e))
 
     return UserBlockOut(id=executive.id, is_blocked=executive.is_blocked)
+
+
+@router.post("/{user_id}/transfer-farms", response_model=FarmTransferOut)
+async def transfer_executive_farms(
+    user_id: uuid.UUID,
+    payload: FarmTransferRequest,
+    _current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    user_service = UserService(db)
+    try:
+        from_id, to_id, farm_ids = await user_service.transfer_farms(
+            user_id,
+            payload.to_executive_id,
+        )
+        await db.commit()
+    except UserServiceError as e:
+        raise_bad_request(str(e))
+
+    return FarmTransferOut(
+        from_executive_id=from_id,
+        to_executive_id=to_id,
+        farms_transferred=len(farm_ids),
+        farm_ids=farm_ids,
+    )
