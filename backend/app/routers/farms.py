@@ -4,12 +4,13 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_db, require_executive
-from app.models.enums import FarmStatus
+from app.core.dependencies import get_current_user, get_db, require_executive, require_super_admin
+from app.models.enums import FarmStatus, UserRole
 from app.models.user import User
 from app.repositories.farm_repository import FarmRepository
+from app.repositories.user_repository import UserRepository
 from app.schemas.common import PaginatedResponse
-from app.schemas.farm import FarmCreate, FarmCreateOut, FarmListItem
+from app.schemas.farm import FarmCreate, FarmCreateOut, FarmDetailOut, FarmListItem, FarmUpdate
 
 router = APIRouter(prefix="/api/v1/farms", tags=["farms"])
 
@@ -73,3 +74,55 @@ async def list_farms(
 
     items = [FarmListItem(**FarmRepository.to_list_item(farm, distance, last_visited)) for farm, distance, last_visited in rows]
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.get("/{farm_id}", response_model=FarmDetailOut)
+async def get_farm(
+    farm_id: uuid.UUID,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    farm_repo = FarmRepository(db)
+    farm = await farm_repo.get_by_id(farm_id)
+    if farm is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
+
+    return FarmRepository.to_detail(farm)
+
+
+@router.patch("/{farm_id}", response_model=FarmDetailOut)
+async def update_farm(
+    farm_id: uuid.UUID,
+    payload: FarmUpdate,
+    _current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    farm_repo = FarmRepository(db)
+    farm = await farm_repo.get_by_id(farm_id)
+    if farm is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
+
+    if "assigned_executive_id" in update_data:
+        executive_id = update_data["assigned_executive_id"]
+        user_repo = UserRepository(db)
+        executive = await user_repo.get_by_id(executive_id)
+        if executive is None or executive.role != UserRole.EXECUTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="assigned_executive_id must reference an existing executive",
+            )
+        if executive.is_blocked:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot assign a blocked executive",
+            )
+
+    await farm_repo.update(farm, **update_data)
+    await db.commit()
+
+    updated_farm = await farm_repo.get_by_id(farm_id)
+    return FarmRepository.to_detail(updated_farm)
