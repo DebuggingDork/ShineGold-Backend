@@ -1,13 +1,21 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.enums import FarmStatus, VisitStatus
+from app.models.farm import Farm
 from app.models.visit import Visit, VisitMcqAnswer, VisitPhoto
-from app.schemas.visit import VisitFormUpdate
+from app.schemas.visit import (
+    McqAnswerOut,
+    VisitDetailOut,
+    VisitExecutiveSummary,
+    VisitFarmSummary,
+    VisitFormUpdate,
+    VisitMineItem,
+)
 
 
 class VisitRepository:
@@ -22,6 +30,7 @@ class VisitRepository:
                 selectinload(Visit.photos),
                 selectinload(Visit.mcq_answers),
                 selectinload(Visit.farm),
+                selectinload(Visit.executive),
             )
         )
         return result.scalar_one_or_none()
@@ -121,3 +130,85 @@ class VisitRepository:
         await self.db.flush()
         await self.db.refresh(visit)
         return visit
+
+    async def list_mine(
+        self,
+        executive_id: uuid.UUID,
+        *,
+        status: VisitStatus | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        farm_name: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[Visit], int]:
+        filters = [Visit.executive_id == executive_id]
+
+        if status is not None:
+            filters.append(Visit.status == status)
+        if date_from is not None:
+            filters.append(
+                Visit.checkin_time
+                >= datetime.combine(date_from, time.min, tzinfo=timezone.utc)
+            )
+        if date_to is not None:
+            filters.append(
+                Visit.checkin_time
+                <= datetime.combine(date_to, time.max, tzinfo=timezone.utc)
+            )
+        if farm_name:
+            filters.append(Farm.name.ilike(f"%{farm_name}%"))
+
+        base_query = (
+            select(Visit)
+            .join(Farm, Farm.id == Visit.farm_id)
+            .where(and_(*filters))
+            .options(selectinload(Visit.farm))
+            .order_by(Visit.checkin_time.desc())
+        )
+        count_query = (
+            select(func.count(func.distinct(Visit.id)))
+            .select_from(Visit)
+            .join(Farm, Farm.id == Visit.farm_id)
+            .where(and_(*filters))
+        )
+
+        total_result = await self.db.execute(count_query)
+        total = total_result.scalar_one()
+
+        result = await self.db.execute(
+            base_query.offset((page - 1) * page_size).limit(page_size)
+        )
+        return list(result.scalars().unique().all()), total
+
+    @staticmethod
+    def to_mine_item(visit: Visit) -> VisitMineItem:
+        return VisitMineItem(
+            visit_id=visit.id,
+            farm=VisitFarmSummary(id=visit.farm.id, name=visit.farm.name),
+            status=visit.status,
+            checkin_time=visit.checkin_time,
+            duration_seconds=visit.duration_seconds,
+        )
+
+    @staticmethod
+    def to_detail(visit: Visit) -> VisitDetailOut:
+        return VisitDetailOut(
+            visit_id=visit.id,
+            farm_id=visit.farm_id,
+            status=visit.status,
+            checkin_time=visit.checkin_time,
+            checkout_time=visit.checkout_time,
+            duration_seconds=visit.duration_seconds,
+            text_note=visit.text_note,
+            photos=[photo.photo_url for photo in visit.photos],
+            voice_note_url=visit.voice_note_url,
+            mcq_answers=[
+                McqAnswerOut(question_key=answer.question_key, answer=answer.answer)
+                for answer in visit.mcq_answers
+            ],
+            visited_by=VisitExecutiveSummary(
+                id=visit.executive.id,
+                name=visit.executive.name,
+            ),
+        )
