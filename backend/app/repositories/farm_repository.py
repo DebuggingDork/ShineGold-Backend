@@ -91,6 +91,23 @@ class FarmRepository:
         await self.db.refresh(farm)
         return farm
 
+    async def transfer_assigned_farms(
+        self,
+        from_executive_id: uuid.UUID,
+        to_executive_id: uuid.UUID,
+    ) -> list[uuid.UUID]:
+        result = await self.db.execute(
+            select(Farm).where(Farm.assigned_executive_id == from_executive_id)
+        )
+        farms = list(result.scalars().all())
+        farm_ids: list[uuid.UUID] = []
+        for farm in farms:
+            farm.assigned_executive_id = to_executive_id
+            farm_ids.append(farm.id)
+        if farm_ids:
+            await self.db.flush()
+        return farm_ids
+
     async def list_farms(
         self,
         *,
