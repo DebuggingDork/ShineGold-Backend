@@ -1,7 +1,9 @@
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.models.enums import PasswordResetStatus
 from app.schemas.user import UserOut
 
 
@@ -41,6 +43,24 @@ class ForgotPasswordResponse(BaseModel):
 
 class ApproveResetRequest(BaseModel):
     temp_password: str
+
+
+class ApproveResetResponse(BaseModel):
+    message: str
+    request_id: uuid.UUID
+
+
+class PasswordResetUserSummary(BaseModel):
+    id: uuid.UUID
+    employee_id: str
+    name: str
+
+
+class PasswordResetListItem(BaseModel):
+    id: uuid.UUID
+    user: PasswordResetUserSummary
+    status: PasswordResetStatus
+    requested_at: datetime
 
 
 class ChangePasswordRequest(BaseModel):

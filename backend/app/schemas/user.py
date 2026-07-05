@@ -55,6 +55,11 @@ class UserBlockUpdate(BaseModel):
     is_blocked: bool
 
 
+class UserBlockOut(BaseModel):
+    id: uuid.UUID
+    is_blocked: bool
+
+
 class UserStats(BaseModel):
     total_farms_visited: int
     onboarding_farms_count: int
