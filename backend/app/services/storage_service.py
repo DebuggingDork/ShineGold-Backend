@@ -21,6 +21,10 @@ EXTENSION_BY_MIME = {
     "audio/mp4": "m4a",
     "audio/aac": "aac",
     "audio/wav": "wav",
+    "audio/webm": "webm",
+    "audio/ogg": "ogg",
+    "audio/3gpp": "3gp",
+    "audio/amr": "amr",
 }
 
 
