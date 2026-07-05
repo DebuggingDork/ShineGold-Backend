@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -44,6 +44,13 @@ class FarmCreateOut(BaseModel):
     name: str
     status: FarmStatus
     farmer_id: uuid.UUID
+    created_at: datetime
+
+
+class FarmerListSummary(BaseModel):
+    name: str
+    mobile_number: str
+    photo_url: str | None = None
 
 
 class FarmListItem(BaseModel):
@@ -51,8 +58,8 @@ class FarmListItem(BaseModel):
     name: str
     location_address: str | None = None
     distance_km: float | None = None
-    farmer: FarmerOut | None = None
-    last_visited: str | None = None
+    farmer: FarmerListSummary | None = None
+    last_visited: datetime | None = None
     status: FarmStatus
 
 
