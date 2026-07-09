@@ -29,11 +29,8 @@ class Farm(Base):
     boundary_geojson: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     photos: Mapped[list | None] = mapped_column(JSONB, nullable=True)  # list[str] of URLs
 
-    assigned_executive_id: Mapped[uuid.UUID | None] = mapped_column(
+    onboarded_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
-    )
-    onboarded_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
     status: Mapped[FarmStatus] = mapped_column(
         Enum(FarmStatus, name="farm_status"), default=FarmStatus.PENDING_VISIT, nullable=False
@@ -45,7 +42,11 @@ class Farm(Base):
     )
 
     # relationships
-    assigned_executive = relationship("User", back_populates="assigned_farms", foreign_keys=[assigned_executive_id])
+    executive_assignments = relationship(
+        "FarmExecutiveAssignment",
+        back_populates="farm",
+        cascade="all, delete-orphan",
+    )
     onboarded_by_user = relationship("User", back_populates="onboarded_farms", foreign_keys=[onboarded_by])
     farmer = relationship("Farmer", back_populates="farm", uselist=False, cascade="all, delete-orphan")
     visits = relationship("Visit", back_populates="farm")

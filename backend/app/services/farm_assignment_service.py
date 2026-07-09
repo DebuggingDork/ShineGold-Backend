@@ -35,12 +35,14 @@ class FarmAssignmentService:
 
     @staticmethod
     def can_visit_farm(executive: User, farm: Farm) -> bool:
-        return farm.assigned_executive_id == executive.id
+        return FarmRepository.is_executive_assigned(farm, executive.id)
 
     async def list_invitations(
         self,
         executive: User,
         *,
+        display_lat: float | None = None,
+        display_lng: float | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[tuple[Farm, float]], int]:
@@ -49,6 +51,8 @@ class FarmAssignmentService:
             home_lat=home_lat,
             home_lng=home_lng,
             radius_km=settings.EXECUTIVE_ASSIGNMENT_RADIUS_KM,
+            display_lat=display_lat,
+            display_lng=display_lng,
             page=page,
             page_size=page_size,
         )
@@ -65,10 +69,11 @@ class FarmAssignmentService:
         if farm is None:
             raise FarmAssignmentError("Farm not found")
 
-        if farm.assigned_executive_id is not None:
-            if farm.assigned_executive_id == executive.id:
-                return farm
-            raise FarmAssignmentError("This farm is already assigned to another executive")
+        if FarmRepository.is_executive_assigned(farm, executive.id):
+            return farm
+
+        if farm.executive_assignments:
+            raise FarmAssignmentError("This farm is already assigned to other executives")
 
         if not self.is_within_assignment_radius(executive, farm):
             raise FarmAssignmentError(
@@ -76,4 +81,26 @@ class FarmAssignmentService:
                 f"({settings.EXECUTIVE_ASSIGNMENT_RADIUS_KM:g} km radius from home)"
             )
 
-        return await self.farm_repo.update(farm, assigned_executive_id=executive.id)
+        return await self.farm_repo.add_executive_assignment(
+            farm,
+            executive.id,
+            assigned_by=executive.id,
+        )
+
+    async def assign_executives(
+        self,
+        farm: Farm,
+        executive_ids: list[uuid.UUID],
+        *,
+        assigned_by: uuid.UUID,
+        mode: str = "replace",
+    ) -> Farm:
+        if not executive_ids and mode != "replace":
+            raise FarmAssignmentError("executive_ids is required for add/remove mode")
+
+        return await self.farm_repo.set_executive_assignments(
+            farm,
+            executive_ids,
+            assigned_by=assigned_by,
+            mode=mode,  # type: ignore[arg-type]
+        )

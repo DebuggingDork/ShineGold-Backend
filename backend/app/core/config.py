@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # Max distance (km) from executive home to farm for proximity-based assignment acceptance
-    EXECUTIVE_ASSIGNMENT_RADIUS_KM: float = 50.0
+    EXECUTIVE_ASSIGNMENT_RADIUS_KM: float = 70.0
 
     @property
     def asyncpg_connect_args(self) -> dict:

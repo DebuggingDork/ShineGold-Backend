@@ -1,7 +1,8 @@
 import uuid
 from datetime import date, datetime
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from app.models.enums import FarmStatus, Gender
 
@@ -25,10 +26,23 @@ class FarmerOut(BaseModel):
     photo_url: str | None = None
 
 
-class FarmCreate(BaseModel):
+class FarmLocation(BaseModel):
+    lat: float
+    lng: float
+    address: str | None = None
+
+
+class ExecutiveSummary(BaseModel):
+    id: uuid.UUID
     name: str
-    location_lat: float
-    location_lng: float
+
+
+class FarmCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    location_lat: float = Field(validation_alias=AliasChoices("location_lat", "latitude"))
+    location_lng: float = Field(validation_alias=AliasChoices("location_lng", "longitude"))
     location_address: str | None = None
     crop: str
     harvest_type: str
@@ -39,11 +53,18 @@ class FarmCreate(BaseModel):
     farmer: FarmerCreate
 
 
+class FarmAdminCreate(FarmCreate):
+    """Super admin farm creation with optional direct executive assignment."""
+
+    executive_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
 class FarmCreateOut(BaseModel):
     id: uuid.UUID
     name: str
     status: FarmStatus
     farmer_id: uuid.UUID
+    assigned_executive_ids: list[uuid.UUID] = Field(default_factory=list)
     created_at: datetime
 
 
@@ -57,25 +78,44 @@ class FarmListItem(BaseModel):
     id: uuid.UUID
     name: str
     location_address: str | None = None
+    location_lat: float | None = None
+    location_lng: float | None = None
+    location: FarmLocation | None = None
     distance_km: float | None = None
     farmer: FarmerListSummary | None = None
     last_visited: datetime | None = None
     status: FarmStatus
+    assigned_executive_id: uuid.UUID | None = None
+    assigned_executive_name: str | None = None
+    assigned_executives: list[ExecutiveSummary] = Field(default_factory=list)
 
 
 class FarmAssignUpdate(BaseModel):
-    executive_id: uuid.UUID
+    executive_ids: list[uuid.UUID] = Field(default_factory=list)
+    executive_id: uuid.UUID | None = None
+    mode: Literal["replace", "add", "remove"] = "replace"
+
+    @model_validator(mode="after")
+    def normalize_executive_ids(self) -> Self:
+        if not self.executive_ids and self.executive_id is not None:
+            self.executive_ids = [self.executive_id]
+        if self.mode in ("add", "remove") and not self.executive_ids:
+            raise ValueError("executive_ids is required for add/remove mode")
+        return self
 
 
 class FarmAssignOut(BaseModel):
     farm_id: uuid.UUID
-    assigned_executive_id: uuid.UUID
+    assigned_executive_ids: list[uuid.UUID]
 
 
 class FarmInvitationItem(BaseModel):
     id: uuid.UUID
     name: str
     location_address: str | None = None
+    location_lat: float | None = None
+    location_lng: float | None = None
+    location: FarmLocation | None = None
     distance_km: float
     farmer: FarmerListSummary | None = None
     status: FarmStatus
@@ -84,19 +124,8 @@ class FarmInvitationItem(BaseModel):
 
 class FarmAcceptOut(BaseModel):
     farm_id: uuid.UUID
-    assigned_executive_id: uuid.UUID
+    assigned_executive_ids: list[uuid.UUID]
     distance_km: float
-
-
-class FarmLocation(BaseModel):
-    lat: float
-    lng: float
-    address: str | None = None
-
-
-class ExecutiveSummary(BaseModel):
-    id: uuid.UUID
-    name: str
 
 
 class VisitLogItem(BaseModel):
@@ -118,13 +147,27 @@ class FarmDetailOut(BaseModel):
     location: FarmLocation
     boundary_geojson: dict | None = None
     total_acres: float
-    assigned_executive: ExecutiveSummary | None = None
+    assigned_executives: list[ExecutiveSummary] = Field(default_factory=list)
     farmer: FarmerOut | None = None
     photos: list[str] | None = None
     status: FarmStatus
     visit_logs: list[VisitLogItem] = []
 
+    @computed_field
+    @property
+    def assigned_executive_id(self) -> uuid.UUID | None:
+        return self.assigned_executives[0].id if self.assigned_executives else None
+
+    @computed_field
+    @property
+    def assigned_executive_name(self) -> str | None:
+        return self.assigned_executives[0].name if self.assigned_executives else None
+
+    @computed_field
+    @property
+    def assigned_executive(self) -> ExecutiveSummary | None:
+        return self.assigned_executives[0] if self.assigned_executives else None
+
 
 class FarmUpdate(BaseModel):
-    assigned_executive_id: uuid.UUID | None = None
     harvest_date: date | None = None
