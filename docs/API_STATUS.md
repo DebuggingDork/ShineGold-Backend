@@ -187,34 +187,32 @@ Full request/response shapes live in [`ShineGoldSpec.md`](../ShineGoldSpec.md).
 
 ---
 
+### Password reset status (executive poll)
+
+| Status | Method | Endpoint | What it does |
+|--------|--------|----------|--------------|
+| ✅ | GET | `/api/v1/auth/password-reset-requests/status?employee_id=` | Public check whether a reset was approved (forgot-password screen). |
+
+### Admin view executive visits
+
+| Status | Method | Endpoint | What it does |
+|--------|--------|----------|--------------|
+| ✅ | GET | `/api/v1/users/{user_id}/visits` | Paginated visit list for a specific executive. Super admin only. |
+
+---
+
 ## Summary
 
 | Module | Done | Partial | Pending |
 |--------|------|---------|---------|
-| Auth (core) | 4 | 1 | 3 |
-| File Uploads | 0 | 1 | 0 |
-| Users / Profile | 0 | 0 | 5 |
-| Farms | 0 | 0 | 5 |
-| Visits | 0 | 0 | 5 |
-| Farmers | 0 | 0 | 2 |
-| Harvests | 0 | 0 | 1 |
-| Dashboard | 0 | 0 | 2 |
-| **Total endpoints** | **5** | **2** | **23** |
+| Auth (core) | 8 | 0 | 0 |
+| File Uploads | 1 | 0 | 0 |
+| Users / Profile | 10 | 0 | 0 |
+| Farms | 10 | 0 | 0 |
+| Visits | 5 | 0 | 0 |
+| Farmers | 2 | 0 | 0 |
+| Harvests | 1 | 0 | 0 |
+| Dashboard | 2 | 0 | 0 |
+| **Total endpoints** | **39** | **0** | **0** |
 
-### What's already in the codebase (no endpoint yet)
-
-- **DB models:** `User`, `PasswordResetRequest`, `Farm`, `Farmer`, `Visit`, `VisitPhoto`, `VisitMcqAnswer`
-- **Pydantic schemas:** auth, user, farm, visit
-- **Services:** `AuthService`, `StorageService` (Supabase presign logic)
-- **Migrations:** users, farms, farmers, visits tables
-
-### Suggested next build order
-
-1. `POST /api/v1/uploads/presign` — wire existing `StorageService`
-2. Farms module — onboard, list, detail
-3. Visits module — check-in → form → submit → mine
-4. Users module — `/users/me`, admin CRUD, block
-5. Forgot-password flow
-6. Farmers list/detail
-7. Harvests calendar
-8. Dashboard aggregations
+> For frontend integration gaps, see [`API_GAP_ANALYSIS.md`](./API_GAP_ANALYSIS.md) and [`FRONTEND_INTEGRATION.md`](./FRONTEND_INTEGRATION.md).

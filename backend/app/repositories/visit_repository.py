@@ -20,6 +20,9 @@ from app.schemas.visit import (
 )
 
 
+from app.services.visit_form_service import VisitFormService
+
+
 def _remarks_preview(text: str | None, limit: int = 120) -> str | None:
     if not text:
         return None
@@ -40,7 +43,8 @@ class VisitRepository:
             .options(
                 selectinload(Visit.photos),
                 selectinload(Visit.mcq_answers),
-                selectinload(Visit.farm),
+                selectinload(Visit.form_answers),
+                selectinload(Visit.farm).selectinload(Farm.farmer),
                 selectinload(Visit.executive),
             )
         )
@@ -113,6 +117,18 @@ class VisitRepository:
                         )
                     )
             updated_fields.append("mcq_answers")
+
+        if payload.form_answers is not None:
+            form_service = VisitFormService(self.db)
+            form_fields = await form_service.save_visit_answers(visit, payload.form_answers)
+            updated_fields.extend(form_fields)
+
+            action_plan = next(
+                (item.answer for item in payload.form_answers if item.question_key == "action_plan"),
+                None,
+            )
+            if action_plan is not None:
+                visit.text_note = action_plan
 
         await self.db.flush()
         await self.db.refresh(visit)
@@ -192,8 +208,6 @@ class VisitRepository:
         )
         return list(result.scalars().unique().all()), total
 
-        return list(result.scalars().unique().all()), total
-
     async def list_for_farm(
         self,
         farm_id: uuid.UUID,
@@ -236,6 +250,7 @@ class VisitRepository:
             .options(
                 selectinload(Visit.photos),
                 selectinload(Visit.mcq_answers),
+                selectinload(Visit.form_answers),
                 selectinload(Visit.farm),
                 selectinload(Visit.executive),
             )
@@ -294,6 +309,7 @@ class VisitRepository:
                 McqAnswerOut(question_key=answer.question_key, answer=answer.answer)
                 for answer in visit.mcq_answers
             ],
+            form_answers=VisitFormService.answers_to_out(list(visit.form_answers)),
             visited_by=VisitExecutiveSummary(
                 id=visit.executive.id,
                 name=visit.executive.name,

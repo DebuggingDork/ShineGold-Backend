@@ -258,7 +258,18 @@ Existing flows **no change** needed for field names:
 
 ---
 
-## 7. Database migration (backend ops)
+## 9. Visit report form (dynamic)
+
+See **[VISIT_FORM.md](./VISIT_FORM.md)** for the full Jackfruit field visit form API.
+
+- `GET /api/v1/visit-forms/active` — active template
+- `GET /api/v1/visit-forms/visits/{visit_id}/context` — template + auto-prefill
+- `PATCH /api/v1/visits/{id}/form` — add `form_answers[]` alongside `photos` / `voice_note_url`
+- Admin CRUD under `/api/v1/visit-forms/templates/...`
+
+---
+
+## 10. Database migration (backend ops)
 
 Run on the API server before testing new assignment features:
 

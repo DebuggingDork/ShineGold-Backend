@@ -41,6 +41,7 @@ class Visit(Base):
     executive = relationship("User", back_populates="visits")
     photos = relationship("VisitPhoto", back_populates="visit", cascade="all, delete-orphan")
     mcq_answers = relationship("VisitMcqAnswer", back_populates="visit", cascade="all, delete-orphan")
+    form_answers = relationship("VisitFormAnswer", back_populates="visit", cascade="all, delete-orphan")
 
 
 class VisitPhoto(Base):

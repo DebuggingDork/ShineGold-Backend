@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, AliasChoices
 
 from app.models.enums import VisitStatus
+from app.schemas.visit_form import FormAnswerIn, FormAnswerOut
 
 
 class CheckinRequest(BaseModel):
@@ -48,6 +49,7 @@ class VisitFormUpdate(BaseModel):
     voice_note_url: str | None = None
     text_note: str | None = None
     mcq_answers: list[McqAnswerIn] | None = None
+    form_answers: list[FormAnswerIn] | None = None
 
 
 class VisitFormResponse(BaseModel):
@@ -123,6 +125,7 @@ class VisitDetailOut(BaseModel):
     photos: list[VisitPhotoOut] = []
     voice_note_url: str | None = None
     mcq_answers: list[McqAnswerOut] = []
+    form_answers: list[FormAnswerOut] = []
     visited_by: VisitExecutiveSummary
     has_voice_note: bool = False
     has_photos: bool = False
