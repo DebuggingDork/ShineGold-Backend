@@ -1,4 +1,3 @@
-import math
 import uuid
 from datetime import datetime
 from typing import Literal
@@ -7,6 +6,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.geo import haversine_km
 from app.models.enums import FarmStatus, VisitStatus
 from app.models.farm import Farm, Farmer
 from app.models.visit import Visit
@@ -19,19 +19,6 @@ from app.schemas.farm import (
     FarmerOut,
     VisitLogItem,
 )
-
-
-def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    radius_km = 6371.0
-    d_lat = math.radians(lat2 - lat1)
-    d_lng = math.radians(lng2 - lng1)
-    a = (
-        math.sin(d_lat / 2) ** 2
-        + math.cos(math.radians(lat1))
-        * math.cos(math.radians(lat2))
-        * math.sin(d_lng / 2) ** 2
-    )
-    return radius_km * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 class FarmRepository:
@@ -179,7 +166,7 @@ class FarmRepository:
             distance_km = None
             if lat is not None and lng is not None:
                 distance_km = round(
-                    _haversine_km(lat, lng, farm.location_lat, farm.location_lng), 1
+                    haversine_km(lat, lng, farm.location_lat, farm.location_lng), 1
                 )
             items.append((farm, distance_km, last_visited_by_farm.get(farm.id)))
 
@@ -195,6 +182,34 @@ class FarmRepository:
 
         offset = (page - 1) * page_size
         return items[offset : offset + page_size], total
+
+    async def list_unassigned_within_radius(
+        self,
+        *,
+        home_lat: float,
+        home_lng: float,
+        radius_km: float,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[tuple[Farm, float]], int]:
+        result = await self.db.execute(
+            select(Farm)
+            .where(Farm.assigned_executive_id.is_(None))
+            .options(selectinload(Farm.farmer))
+            .order_by(Farm.created_at.desc())
+        )
+        farms = list(result.scalars().all())
+
+        within_radius: list[tuple[Farm, float]] = []
+        for farm in farms:
+            distance = round(haversine_km(home_lat, home_lng, farm.location_lat, farm.location_lng), 1)
+            if distance <= radius_km:
+                within_radius.append((farm, distance))
+
+        within_radius.sort(key=lambda item: item[1])
+        total = len(within_radius)
+        offset = (page - 1) * page_size
+        return within_radius[offset : offset + page_size], total
 
     @staticmethod
     def to_list_item(

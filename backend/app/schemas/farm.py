@@ -72,6 +72,22 @@ class FarmAssignOut(BaseModel):
     assigned_executive_id: uuid.UUID
 
 
+class FarmInvitationItem(BaseModel):
+    id: uuid.UUID
+    name: str
+    location_address: str | None = None
+    distance_km: float
+    farmer: FarmerListSummary | None = None
+    status: FarmStatus
+    assignment_radius_km: float
+
+
+class FarmAcceptOut(BaseModel):
+    farm_id: uuid.UUID
+    assigned_executive_id: uuid.UUID
+    distance_km: float
+
+
 class FarmLocation(BaseModel):
     lat: float
     lng: float

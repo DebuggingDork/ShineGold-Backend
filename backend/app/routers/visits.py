@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.visit import Visit
 from app.repositories.farm_repository import FarmRepository
 from app.repositories.visit_repository import VisitRepository
+from app.services.farm_assignment_service import FarmAssignmentService
 from app.schemas.common import PaginatedResponse
 from app.schemas.visit import (
     CheckinRequest,
@@ -51,6 +52,12 @@ async def checkin(
     farm = await farm_repo.get_by_id(payload.farm_id)
     if farm is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
+
+    if not FarmAssignmentService.can_visit_farm(current_user, farm):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not assigned to this farm. Onboard it or accept a nearby invitation first.",
+        )
 
     visit_repo = VisitRepository(db)
     existing = await visit_repo.get_in_progress_for_executive(current_user.id)
