@@ -24,7 +24,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # --- App ---
     ENVIRONMENT: str = "development"
+
+    # Max distance (km) from executive home to farm for proximity-based assignment acceptance
+    EXECUTIVE_ASSIGNMENT_RADIUS_KM: float = 70.0
 
     @property
     def asyncpg_connect_args(self) -> dict:

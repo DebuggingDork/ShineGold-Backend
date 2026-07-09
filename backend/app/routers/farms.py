@@ -6,21 +6,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db, require_executive, require_super_admin
 from app.core.http import raise_bad_request, raise_not_found
-from app.models.enums import FarmStatus
+from app.core.config import settings
+from app.models.enums import FarmStatus, UserRole
 from app.models.user import User
 from app.repositories.farm_repository import FarmRepository
 from app.repositories.visit_repository import VisitRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.farm import (
+    FarmAcceptOut,
+    FarmAdminCreate,
     FarmAssignOut,
     FarmAssignUpdate,
     FarmCreate,
     FarmCreateOut,
     FarmDetailOut,
+    FarmInvitationItem,
     FarmListItem,
     FarmUpdate,
 )
 from app.schemas.visit import VisitDetailOut, VisitHistoryItem
+from app.services.farm_assignment_service import FarmAssignmentError, FarmAssignmentService
 from app.services.user_service import UserService, UserServiceError
 
 router = APIRouter(prefix="/api/v1/farms", tags=["farms"])
@@ -41,7 +46,105 @@ async def onboard_farm(
         name=farm.name,
         status=farm.status,
         farmer_id=farmer.id,
+        assigned_executive_ids=FarmRepository.assigned_executive_ids(farm),
         created_at=farm.created_at,
+    )
+
+
+@router.post("/admin", response_model=FarmCreateOut, status_code=status.HTTP_201_CREATED)
+async def create_farm_as_admin(
+    payload: FarmAdminCreate,
+    current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Super admin creates a farm directly and optionally assigns one or more executives."""
+    user_service = UserService(db)
+    for executive_id in payload.executive_ids:
+        try:
+            await user_service.get_assignable_executive(executive_id)
+        except UserServiceError as e:
+            raise_bad_request(str(e))
+
+    farm_repo = FarmRepository(db)
+    farm, farmer = await farm_repo.create(
+        payload,
+        onboarded_by=current_user.id,
+        executive_ids=payload.executive_ids,
+        assigned_by=current_user.id,
+    )
+    await db.commit()
+
+    return FarmCreateOut(
+        id=farm.id,
+        name=farm.name,
+        status=farm.status,
+        farmer_id=farmer.id,
+        assigned_executive_ids=FarmRepository.assigned_executive_ids(farm),
+        created_at=farm.created_at,
+    )
+
+
+@router.get("/invitations", response_model=PaginatedResponse[FarmInvitationItem])
+async def list_farm_invitations(
+    lat: float | None = Query(None, description="Device latitude for distance display"),
+    lng: float | None = Query(None, description="Device longitude for distance display"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(require_executive),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unassigned farms within home-location coverage; optional lat/lng for display distance."""
+    assignment_service = FarmAssignmentService(db)
+    try:
+        rows, total = await assignment_service.list_invitations(
+            current_user,
+            display_lat=lat,
+            display_lng=lng,
+            page=page,
+            page_size=page_size,
+        )
+    except FarmAssignmentError as e:
+        raise_bad_request(str(e))
+
+    items = []
+    for farm, distance_km in rows:
+        list_item = FarmRepository.to_list_item(farm, distance_km, None)
+        items.append(
+            FarmInvitationItem(
+                id=farm.id,
+                name=farm.name,
+                location_address=farm.location_address,
+                location_lat=farm.location_lat,
+                location_lng=farm.location_lng,
+                location=list_item["location"],
+                distance_km=distance_km,
+                farmer=list_item["farmer"],
+                status=farm.status,
+                assignment_radius_km=settings.EXECUTIVE_ASSIGNMENT_RADIUS_KM,
+            )
+        )
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.post("/{farm_id}/accept", response_model=FarmAcceptOut)
+async def accept_farm_invitation(
+    farm_id: uuid.UUID,
+    current_user: User = Depends(require_executive),
+    db: AsyncSession = Depends(get_db),
+):
+    """Accept proximity-based assignment for an unassigned farm within coverage radius."""
+    assignment_service = FarmAssignmentService(db)
+    try:
+        farm = await assignment_service.accept_invitation(current_user, farm_id)
+        distance_km = round(assignment_service.distance_to_farm(current_user, farm), 1)
+    except FarmAssignmentError as e:
+        raise_bad_request(str(e))
+
+    await db.commit()
+    return FarmAcceptOut(
+        farm_id=farm.id,
+        assigned_executive_ids=FarmRepository.assigned_executive_ids(farm),
+        distance_km=distance_km,
     )
 
 
@@ -55,7 +158,7 @@ async def list_farms(
     search: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     assigned_to_id = None
@@ -67,6 +170,8 @@ async def list_farms(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="assigned_to must be a valid UUID",
             ) from e
+    elif current_user.role == UserRole.EXECUTIVE:
+        assigned_to_id = current_user.id
 
     farm_repo = FarmRepository(db)
     try:
@@ -128,13 +233,21 @@ async def list_farm_visits(
 @router.get("/{farm_id}", response_model=FarmDetailOut)
 async def get_farm(
     farm_id: uuid.UUID,
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     farm_repo = FarmRepository(db)
     farm = await farm_repo.get_by_id(farm_id)
     if farm is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
+
+    if current_user.role == UserRole.EXECUTIVE and not FarmRepository.is_executive_assigned(
+        farm, current_user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not assigned to this farm",
+        )
 
     return FarmRepository.to_detail(farm)
 
@@ -155,13 +268,6 @@ async def update_farm(
     if not update_data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
 
-    if "assigned_executive_id" in update_data:
-        user_service = UserService(db)
-        try:
-            await user_service.get_assignable_executive(update_data["assigned_executive_id"])
-        except UserServiceError as e:
-            raise_bad_request(str(e))
-
     await farm_repo.update(farm, **update_data)
     await db.commit()
 
@@ -170,24 +276,38 @@ async def update_farm(
 
 
 @router.patch("/{farm_id}/assign", response_model=FarmAssignOut)
-async def assign_farm_executive(
+async def assign_farm_executives(
     farm_id: uuid.UUID,
     payload: FarmAssignUpdate,
-    _current_user: User = Depends(require_super_admin),
+    current_user: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    """Assign one or more executives to a farm. Use mode=replace|add|remove."""
     farm_repo = FarmRepository(db)
     farm = await farm_repo.get_by_id(farm_id)
     if farm is None:
         raise_not_found("Farm not found")
 
     user_service = UserService(db)
+    for executive_id in payload.executive_ids:
+        try:
+            await user_service.get_assignable_executive(executive_id)
+        except UserServiceError as e:
+            raise_bad_request(str(e))
+
+    assignment_service = FarmAssignmentService(db)
     try:
-        await user_service.get_assignable_executive(payload.executive_id)
-    except UserServiceError as e:
+        farm = await assignment_service.assign_executives(
+            farm,
+            payload.executive_ids,
+            assigned_by=current_user.id,
+            mode=payload.mode,
+        )
+    except FarmAssignmentError as e:
         raise_bad_request(str(e))
 
-    await farm_repo.update(farm, assigned_executive_id=payload.executive_id)
     await db.commit()
-
-    return FarmAssignOut(farm_id=farm.id, assigned_executive_id=payload.executive_id)
+    return FarmAssignOut(
+        farm_id=farm.id,
+        assigned_executive_ids=FarmRepository.assigned_executive_ids(farm),
+    )

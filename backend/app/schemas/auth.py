@@ -63,6 +63,13 @@ class PasswordResetListItem(BaseModel):
     requested_at: datetime
 
 
+class PasswordResetStatusOut(BaseModel):
+    employee_id: str
+    status: PasswordResetStatus | None = None
+    approved: bool = False
+    message: str
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str

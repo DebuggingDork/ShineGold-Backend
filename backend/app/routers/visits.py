@@ -9,7 +9,10 @@ from app.models.enums import UserRole, VisitStatus
 from app.models.user import User
 from app.models.visit import Visit
 from app.repositories.farm_repository import FarmRepository
+from app.core.http import raise_bad_request
 from app.repositories.visit_repository import VisitRepository
+from app.services.farm_assignment_service import FarmAssignmentService
+from app.services.visit_form_service import VisitFormService, VisitFormServiceError
 from app.schemas.common import PaginatedResponse
 from app.schemas.visit import (
     CheckinRequest,
@@ -51,6 +54,12 @@ async def checkin(
     farm = await farm_repo.get_by_id(payload.farm_id)
     if farm is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
+
+    if not FarmAssignmentService.can_visit_farm(current_user, farm):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not assigned to this farm. Onboard it or accept a nearby invitation first.",
+        )
 
     visit_repo = VisitRepository(db)
     existing = await visit_repo.get_in_progress_for_executive(current_user.id)
@@ -137,7 +146,10 @@ async def update_visit_form(
     if not update_data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
 
-    updated_fields = await visit_repo.update_form(visit, payload)
+    try:
+        updated_fields = await visit_repo.update_form(visit, payload)
+    except VisitFormServiceError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     await db.commit()
 
     return VisitFormResponse(
@@ -158,6 +170,12 @@ async def submit_visit(
     visit = _require_in_progress_visit(
         await visit_repo.get_by_id(visit_id), current_user.id
     )
+
+    form_service = VisitFormService(db)
+    try:
+        await form_service.validate_required_answers(visit_id)
+    except VisitFormServiceError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     visit = await visit_repo.submit(
         visit,

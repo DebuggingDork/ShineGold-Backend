@@ -1,15 +1,18 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, AliasChoices
 
 from app.models.enums import VisitStatus
+from app.schemas.visit_form import FormAnswerIn, FormAnswerOut
 
 
 class CheckinRequest(BaseModel):
     farm_id: uuid.UUID
-    checkin_lat: float
-    checkin_lng: float
+    checkin_lat: float = Field(validation_alias=AliasChoices("checkin_lat", "latitude"))
+    checkin_lng: float = Field(validation_alias=AliasChoices("checkin_lng", "longitude"))
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class CheckinResponse(BaseModel):
@@ -46,6 +49,7 @@ class VisitFormUpdate(BaseModel):
     voice_note_url: str | None = None
     text_note: str | None = None
     mcq_answers: list[McqAnswerIn] | None = None
+    form_answers: list[FormAnswerIn] | None = None
 
 
 class VisitFormResponse(BaseModel):
@@ -55,8 +59,10 @@ class VisitFormResponse(BaseModel):
 
 
 class VisitSubmitRequest(BaseModel):
-    checkout_lat: float
-    checkout_lng: float
+    checkout_lat: float = Field(validation_alias=AliasChoices("checkout_lat", "latitude"))
+    checkout_lng: float = Field(validation_alias=AliasChoices("checkout_lng", "longitude"))
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class VisitSubmitResponse(BaseModel):
@@ -119,6 +125,7 @@ class VisitDetailOut(BaseModel):
     photos: list[VisitPhotoOut] = []
     voice_note_url: str | None = None
     mcq_answers: list[McqAnswerOut] = []
+    form_answers: list[FormAnswerOut] = []
     visited_by: VisitExecutiveSummary
     has_voice_note: bool = False
     has_photos: bool = False

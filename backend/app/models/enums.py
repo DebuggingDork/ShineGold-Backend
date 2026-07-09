@@ -28,3 +28,13 @@ class PasswordResetStatus(str, enum.Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+
+
+class FormQuestionType(str, enum.Enum):
+    SINGLE_CHOICE = "single_choice"
+    MULTI_CHOICE = "multi_choice"
+    RATING_SCALE = "rating_scale"
+    MATRIX = "matrix"
+    TEXT = "text"
+    TEXTAREA = "textarea"
+    SECTION_HEADER = "section_header"

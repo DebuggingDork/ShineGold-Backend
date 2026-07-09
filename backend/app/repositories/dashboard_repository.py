@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import FarmStatus, UserRole, VisitStatus
 from app.models.farm import Farm, Farmer
+from app.models.farm_executive_assignment import FarmExecutiveAssignment
 from app.models.user import User
 from app.models.visit import Visit
 from app.schemas.dashboard import AdminDashboardOut, ExecutiveDashboardOut, UpcomingHarvest
@@ -69,10 +70,14 @@ class DashboardRepository:
         today = datetime.now(timezone.utc).date()
 
         pending_result = await self.db.execute(
-            select(func.count())
+            select(func.count(func.distinct(Farm.id)))
             .select_from(Farm)
+            .join(
+                FarmExecutiveAssignment,
+                FarmExecutiveAssignment.farm_id == Farm.id,
+            )
             .where(
-                Farm.assigned_executive_id == executive.id,
+                FarmExecutiveAssignment.executive_id == executive.id,
                 Farm.status == FarmStatus.PENDING_VISIT,
             )
         )
@@ -90,8 +95,12 @@ class DashboardRepository:
 
         upcoming_result = await self.db.execute(
             select(Farm)
+            .join(
+                FarmExecutiveAssignment,
+                FarmExecutiveAssignment.farm_id == Farm.id,
+            )
             .where(
-                Farm.assigned_executive_id == executive.id,
+                FarmExecutiveAssignment.executive_id == executive.id,
                 Farm.harvest_date >= today,
             )
             .order_by(Farm.harvest_date.asc())

@@ -67,6 +67,15 @@ class PasswordResetRepository:
         )
         return list(result.scalars().unique().all()), total
 
+    async def get_latest_for_user(self, user_id: uuid.UUID) -> PasswordResetRequest | None:
+        result = await self.db.execute(
+            select(PasswordResetRequest)
+            .where(PasswordResetRequest.user_id == user_id)
+            .order_by(PasswordResetRequest.requested_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def resolve(
         self,
         request: PasswordResetRequest,

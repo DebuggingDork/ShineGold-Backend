@@ -1,3 +1,4 @@
+from datetime import date
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
@@ -7,9 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user, get_db, require_executive, require_super_admin
 from app.core.http import raise_bad_request, raise_not_found
 from app.core.user_helpers import requires_location_setup
+from app.models.enums import VisitStatus
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
+from app.repositories.visit_repository import VisitRepository
 from app.schemas.common import PaginatedResponse
+from app.schemas.visit import VisitMineItem
 from app.schemas.user import (
     BulkImportOut,
     FarmTransferOut,
@@ -172,6 +176,38 @@ async def update_current_user(
 
     stats = await user_repo.get_user_stats(current_user.id)
     return _build_user_me_out(current_user, stats)
+
+
+@router.get("/{user_id}/visits", response_model=PaginatedResponse[VisitMineItem])
+async def list_executive_visits(
+    user_id: uuid.UUID,
+    status: VisitStatus | None = Query(None),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    farm_name: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    _current_user: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Super admin view of an executive's visit history (paginated, filterable)."""
+    user_repo = UserRepository(db)
+    executive = await user_repo.get_executive_by_id(user_id)
+    if executive is None:
+        raise_not_found("Executive not found")
+
+    visit_repo = VisitRepository(db)
+    visits, total = await visit_repo.list_mine(
+        user_id,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
+        farm_name=farm_name,
+        page=page,
+        page_size=page_size,
+    )
+    items = [VisitRepository.to_mine_item(visit) for visit in visits]
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get("/{user_id}", response_model=UserDetailOut)

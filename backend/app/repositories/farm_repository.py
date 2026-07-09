@@ -1,14 +1,15 @@
-import math
 import uuid
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.geo import haversine_km
 from app.models.enums import FarmStatus, VisitStatus
 from app.models.farm import Farm, Farmer
+from app.models.farm_executive_assignment import FarmExecutiveAssignment
 from app.models.visit import Visit
 from app.schemas.farm import (
     ExecutiveSummary,
@@ -21,24 +22,40 @@ from app.schemas.farm import (
 )
 
 
-def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    radius_km = 6371.0
-    d_lat = math.radians(lat2 - lat1)
-    d_lng = math.radians(lng2 - lng1)
-    a = (
-        math.sin(d_lat / 2) ** 2
-        + math.cos(math.radians(lat1))
-        * math.cos(math.radians(lat2))
-        * math.sin(d_lng / 2) ** 2
-    )
-    return radius_km * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-
 class FarmRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, payload: FarmCreate, onboarded_by: uuid.UUID) -> tuple[Farm, Farmer]:
+    @staticmethod
+    def _farm_load_options():
+        return (
+            selectinload(Farm.farmer),
+            selectinload(Farm.executive_assignments).selectinload(
+                FarmExecutiveAssignment.executive
+            ),
+            selectinload(Farm.visits).selectinload(Visit.executive),
+            selectinload(Farm.visits).selectinload(Visit.photos),
+        )
+
+    @staticmethod
+    def is_executive_assigned(farm: Farm, executive_id: uuid.UUID) -> bool:
+        return any(
+            assignment.executive_id == executive_id
+            for assignment in farm.executive_assignments
+        )
+
+    @staticmethod
+    def assigned_executive_ids(farm: Farm) -> list[uuid.UUID]:
+        return [assignment.executive_id for assignment in farm.executive_assignments]
+
+    async def create(
+        self,
+        payload: FarmCreate,
+        *,
+        onboarded_by: uuid.UUID | None,
+        executive_ids: list[uuid.UUID] | None = None,
+        assigned_by: uuid.UUID | None = None,
+    ) -> tuple[Farm, Farmer]:
         farm = Farm(
             name=payload.name,
             location_lat=payload.location_lat,
@@ -51,7 +68,6 @@ class FarmRepository:
             boundary_geojson=payload.boundary_geojson,
             photos=payload.photos,
             onboarded_by=onboarded_by,
-            assigned_executive_id=onboarded_by,
             status=FarmStatus.PENDING_VISIT,
         )
         self.db.add(farm)
@@ -67,20 +83,92 @@ class FarmRepository:
         )
         self.db.add(farmer)
         await self.db.flush()
+
+        if executive_ids:
+            await self.set_executive_assignments(
+                farm,
+                executive_ids,
+                assigned_by=assigned_by,
+                mode="replace",
+            )
+        elif onboarded_by is not None:
+            await self.add_executive_assignment(
+                farm,
+                onboarded_by,
+                assigned_by=onboarded_by,
+            )
+
         await self.db.refresh(farm)
         await self.db.refresh(farmer)
         return farm, farmer
 
+    async def add_executive_assignment(
+        self,
+        farm: Farm,
+        executive_id: uuid.UUID,
+        *,
+        assigned_by: uuid.UUID | None = None,
+    ) -> Farm:
+        if self.is_executive_assigned(farm, executive_id):
+            return farm
+
+        self.db.add(
+            FarmExecutiveAssignment(
+                farm_id=farm.id,
+                executive_id=executive_id,
+                assigned_by=assigned_by,
+            )
+        )
+        await self.db.flush()
+        await self.db.refresh(farm)
+        return farm
+
+    async def set_executive_assignments(
+        self,
+        farm: Farm,
+        executive_ids: list[uuid.UUID],
+        *,
+        assigned_by: uuid.UUID | None = None,
+        mode: Literal["replace", "add", "remove"] = "replace",
+    ) -> Farm:
+        unique_ids = list(dict.fromkeys(executive_ids))
+        current_ids = set(self.assigned_executive_ids(farm))
+
+        if mode == "replace":
+            target_ids = set(unique_ids)
+            to_remove = current_ids - target_ids
+            to_add = target_ids - current_ids
+        elif mode == "add":
+            to_remove: set[uuid.UUID] = set()
+            to_add = set(unique_ids) - current_ids
+        else:
+            to_remove = set(unique_ids) & current_ids
+            to_add = set()
+
+        if to_remove:
+            await self.db.execute(
+                delete(FarmExecutiveAssignment).where(
+                    FarmExecutiveAssignment.farm_id == farm.id,
+                    FarmExecutiveAssignment.executive_id.in_(to_remove),
+                )
+            )
+
+        for executive_id in to_add:
+            self.db.add(
+                FarmExecutiveAssignment(
+                    farm_id=farm.id,
+                    executive_id=executive_id,
+                    assigned_by=assigned_by,
+                )
+            )
+
+        await self.db.flush()
+        await self.db.refresh(farm)
+        return farm
+
     async def get_by_id(self, farm_id: uuid.UUID) -> Farm | None:
         result = await self.db.execute(
-            select(Farm)
-            .where(Farm.id == farm_id)
-            .options(
-                selectinload(Farm.farmer),
-                selectinload(Farm.assigned_executive),
-                selectinload(Farm.visits).selectinload(Visit.executive),
-                selectinload(Farm.visits).selectinload(Visit.photos),
-            )
+            select(Farm).where(Farm.id == farm_id).options(*self._farm_load_options())
         )
         return result.scalar_one_or_none()
 
@@ -97,13 +185,24 @@ class FarmRepository:
         to_executive_id: uuid.UUID,
     ) -> list[uuid.UUID]:
         result = await self.db.execute(
-            select(Farm).where(Farm.assigned_executive_id == from_executive_id)
+            select(FarmExecutiveAssignment).where(
+                FarmExecutiveAssignment.executive_id == from_executive_id
+            )
         )
-        farms = list(result.scalars().all())
+        assignments = list(result.scalars().all())
         farm_ids: list[uuid.UUID] = []
-        for farm in farms:
-            farm.assigned_executive_id = to_executive_id
-            farm_ids.append(farm.id)
+        for assignment in assignments:
+            farm_ids.append(assignment.farm_id)
+            duplicate = await self.db.execute(
+                select(FarmExecutiveAssignment.id).where(
+                    FarmExecutiveAssignment.farm_id == assignment.farm_id,
+                    FarmExecutiveAssignment.executive_id == to_executive_id,
+                )
+            )
+            if duplicate.scalar_one_or_none() is not None:
+                await self.db.delete(assignment)
+            else:
+                assignment.executive_id = to_executive_id
         if farm_ids:
             await self.db.flush()
         return farm_ids
@@ -130,16 +229,21 @@ class FarmRepository:
             .subquery()
         )
 
-        base_query = select(Farm).options(selectinload(Farm.farmer))
+        base_query = select(Farm).options(
+            selectinload(Farm.farmer),
+            selectinload(Farm.executive_assignments).selectinload(
+                FarmExecutiveAssignment.executive
+            ),
+        )
         count_query = select(func.count(func.distinct(Farm.id)))
 
         filters = []
         if harvest_status is not None:
             filters.append(Farm.status == harvest_status)
-        if assigned_to is not None:
-            filters.append(Farm.assigned_executive_id == assigned_to)
 
         needs_farmer_join = bool(search)
+        needs_assignment_join = assigned_to is not None
+
         if needs_farmer_join:
             base_query = base_query.join(Farmer, Farmer.farm_id == Farm.id)
             count_query = count_query.select_from(Farm).join(Farmer, Farmer.farm_id == Farm.id)
@@ -151,6 +255,18 @@ class FarmRepository:
             )
         else:
             count_query = count_query.select_from(Farm)
+
+        if needs_assignment_join:
+            base_query = base_query.join(
+                FarmExecutiveAssignment,
+                FarmExecutiveAssignment.farm_id == Farm.id,
+            )
+            if not needs_farmer_join:
+                count_query = count_query.select_from(Farm).join(
+                    FarmExecutiveAssignment,
+                    FarmExecutiveAssignment.farm_id == Farm.id,
+                )
+            filters.append(FarmExecutiveAssignment.executive_id == assigned_to)
 
         if filters:
             base_query = base_query.where(and_(*filters))
@@ -179,7 +295,7 @@ class FarmRepository:
             distance_km = None
             if lat is not None and lng is not None:
                 distance_km = round(
-                    _haversine_km(lat, lng, farm.location_lat, farm.location_lng), 1
+                    haversine_km(lat, lng, farm.location_lat, farm.location_lng), 1
                 )
             items.append((farm, distance_km, last_visited_by_farm.get(farm.id)))
 
@@ -196,6 +312,46 @@ class FarmRepository:
         offset = (page - 1) * page_size
         return items[offset : offset + page_size], total
 
+    async def list_unassigned_within_radius(
+        self,
+        *,
+        home_lat: float,
+        home_lng: float,
+        radius_km: float,
+        display_lat: float | None = None,
+        display_lng: float | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[tuple[Farm, float]], int]:
+        distance_lat = display_lat if display_lat is not None else home_lat
+        distance_lng = display_lng if display_lng is not None else home_lng
+
+        assigned_farm_ids = select(FarmExecutiveAssignment.farm_id).distinct()
+        result = await self.db.execute(
+            select(Farm)
+            .where(Farm.id.not_in(assigned_farm_ids))
+            .options(selectinload(Farm.farmer))
+            .order_by(Farm.created_at.desc())
+        )
+        farms = list(result.scalars().all())
+
+        within_radius: list[tuple[Farm, float]] = []
+        for farm in farms:
+            coverage_distance = round(
+                haversine_km(home_lat, home_lng, farm.location_lat, farm.location_lng), 1
+            )
+            if coverage_distance <= radius_km:
+                display_distance = round(
+                    haversine_km(distance_lat, distance_lng, farm.location_lat, farm.location_lng),
+                    1,
+                )
+                within_radius.append((farm, display_distance))
+
+        within_radius.sort(key=lambda item: item[1])
+        total = len(within_radius)
+        offset = (page - 1) * page_size
+        return within_radius[offset : offset + page_size], total
+
     @staticmethod
     def to_list_item(
         farm: Farm, distance_km: float | None, last_visited: datetime | None
@@ -208,24 +364,46 @@ class FarmRepository:
                 photo_url=farm.farmer.photo_url,
             )
 
+        assigned_executives = [
+            ExecutiveSummary(
+                id=assignment.executive.id,
+                name=assignment.executive.name,
+            )
+            for assignment in farm.executive_assignments
+            if assignment.executive is not None
+        ]
+        primary_executive = assigned_executives[0] if assigned_executives else None
+        location = FarmLocation(
+            lat=farm.location_lat,
+            lng=farm.location_lng,
+            address=farm.location_address,
+        )
+
         return {
             "id": farm.id,
             "name": farm.name,
             "location_address": farm.location_address,
+            "location_lat": farm.location_lat,
+            "location_lng": farm.location_lng,
+            "location": location,
             "distance_km": distance_km,
             "farmer": farmer_summary,
             "last_visited": last_visited,
             "status": farm.status,
+            "assigned_executives": assigned_executives,
+            "assigned_executive_id": primary_executive.id if primary_executive else None,
+            "assigned_executive_name": primary_executive.name if primary_executive else None,
         }
 
     @staticmethod
     def to_detail(farm: Farm) -> FarmDetailOut:
-        assigned_executive = None
-        if farm.assigned_executive:
-            assigned_executive = ExecutiveSummary(
-                id=farm.assigned_executive.id,
-                name=farm.assigned_executive.name,
+        assigned_executives = [
+            ExecutiveSummary(
+                id=assignment.executive.id,
+                name=assignment.executive.name,
             )
+            for assignment in farm.executive_assignments
+        ]
 
         farmer = FarmerOut.model_validate(farm.farmer) if farm.farmer else None
 
@@ -266,7 +444,7 @@ class FarmRepository:
             ),
             boundary_geojson=farm.boundary_geojson,
             total_acres=farm.total_acres,
-            assigned_executive=assigned_executive,
+            assigned_executives=assigned_executives,
             farmer=farmer,
             photos=farm.photos,
             status=farm.status,

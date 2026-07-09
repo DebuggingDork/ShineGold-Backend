@@ -7,7 +7,7 @@ from app.models.enums import PasswordResetStatus, UserRole
 from app.models.user import PasswordResetRequest
 from app.repositories.password_reset_repository import PasswordResetRepository
 from app.repositories.user_repository import UserRepository
-from app.schemas.auth import PasswordResetListItem, PasswordResetUserSummary
+from app.schemas.auth import PasswordResetListItem, PasswordResetStatusOut, PasswordResetUserSummary
 
 
 class PasswordResetError(Exception):
@@ -47,6 +47,46 @@ class PasswordResetService:
         )
         items = [self._to_list_item(request) for request in requests]
         return items, total
+
+    async def get_status_for_employee(self, employee_id: str) -> PasswordResetStatusOut:
+        user = await self.user_repo.get_by_employee_id(employee_id)
+        if user is None or user.role != UserRole.EXECUTIVE:
+            return PasswordResetStatusOut(
+                employee_id=employee_id,
+                approved=False,
+                message="No executive account found for this employee ID",
+            )
+
+        latest = await self.reset_repo.get_latest_for_user(user.id)
+        if latest is None:
+            return PasswordResetStatusOut(
+                employee_id=employee_id,
+                approved=False,
+                message="No password reset request found",
+            )
+
+        if latest.status == PasswordResetStatus.PENDING:
+            return PasswordResetStatusOut(
+                employee_id=employee_id,
+                status=PasswordResetStatus.PENDING,
+                approved=False,
+                message="Reset request is pending admin approval",
+            )
+
+        if latest.status == PasswordResetStatus.APPROVED:
+            return PasswordResetStatusOut(
+                employee_id=employee_id,
+                status=PasswordResetStatus.APPROVED,
+                approved=True,
+                message="Reset approved. Log in with your temporary password, then change it.",
+            )
+
+        return PasswordResetStatusOut(
+            employee_id=employee_id,
+            status=latest.status,
+            approved=False,
+            message="Password reset request was rejected",
+        )
 
     async def approve(self, request_id: uuid.UUID, temp_password: str) -> PasswordResetRequest:
         request = await self.reset_repo.get_by_id(request_id)

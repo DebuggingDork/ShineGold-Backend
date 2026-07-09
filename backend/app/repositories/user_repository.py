@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.enums import UserRole, VisitStatus
 from app.models.farm import Farm
+from app.models.farm_executive_assignment import FarmExecutiveAssignment
 from app.models.user import User
 from app.models.visit import Visit
 from app.schemas.user import (
@@ -85,8 +86,8 @@ class UserRepository:
     async def count_assigned_farms(self, executive_id: uuid.UUID) -> int:
         result = await self.db.execute(
             select(func.count())
-            .select_from(Farm)
-            .where(Farm.assigned_executive_id == executive_id)
+            .select_from(FarmExecutiveAssignment)
+            .where(FarmExecutiveAssignment.executive_id == executive_id)
         )
         return result.scalar_one()
 
@@ -143,7 +144,11 @@ class UserRepository:
 
         farms_result = await self.db.execute(
             select(Farm)
-            .where(Farm.assigned_executive_id == user_id)
+            .join(
+                FarmExecutiveAssignment,
+                FarmExecutiveAssignment.farm_id == Farm.id,
+            )
+            .where(FarmExecutiveAssignment.executive_id == user_id)
             .order_by(Farm.name.asc())
         )
         farms = list(farms_result.scalars().all())

@@ -17,6 +17,7 @@ from app.schemas.auth import (
     LoginRequest,
     LogoutRequest,
     PasswordResetListItem,
+    PasswordResetStatusOut,
     RefreshRequest,
     RefreshResponse,
     TokenResponse,
@@ -84,6 +85,16 @@ async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Dep
         message="Reset request submitted. Await admin approval.",
         request_id=request.id,
     )
+
+
+@router.get("/password-reset-requests/status", response_model=PasswordResetStatusOut)
+async def password_reset_status(
+    employee_id: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+):
+    """Public status check used by the forgot-password screen while waiting for admin approval."""
+    reset_service = PasswordResetService(db)
+    return await reset_service.get_status_for_employee(employee_id)
 
 
 @router.get("/password-reset-requests", response_model=PaginatedResponse[PasswordResetListItem])

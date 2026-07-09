@@ -85,3 +85,6 @@ static/collected/
 
 # --- Alembic (keep migrations; ignore local scratch) ---
 alembic/versions/*.pyc
+
+# --- Flutter frontend (separate repo: github.com/Charanreddy2408/shinegold) ---
+shinegold/

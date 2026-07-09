@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, AliasChoices
 
 from app.models.enums import FarmStatus, UserRole, VisitStatus
 
@@ -72,9 +72,11 @@ class UserMeOut(UserOut):
 
 
 class UserLocationSetup(BaseModel):
-    home_lat: float
-    home_lng: float
+    home_lat: float = Field(validation_alias=AliasChoices("home_lat", "latitude"))
+    home_lng: float = Field(validation_alias=AliasChoices("home_lng", "longitude"))
     address: str | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class UserListItem(BaseModel):

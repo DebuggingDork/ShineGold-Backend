@@ -34,7 +34,11 @@ class User(Base):
 
     # relationships
     onboarded_farms = relationship("Farm", back_populates="onboarded_by_user", foreign_keys="Farm.onboarded_by")
-    assigned_farms = relationship("Farm", back_populates="assigned_executive", foreign_keys="Farm.assigned_executive_id")
+    farm_assignments = relationship(
+        "FarmExecutiveAssignment",
+        back_populates="executive",
+        foreign_keys="FarmExecutiveAssignment.executive_id",
+    )
     visits = relationship("Visit", back_populates="executive")
     password_reset_requests = relationship("PasswordResetRequest", back_populates="user")
 
