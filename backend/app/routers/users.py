@@ -22,6 +22,7 @@ from app.schemas.user import (
     UserListItem,
     UserLocationSetup,
     UserMeOut,
+    UserOut,
     UserUpdateMe,
 )
 from app.services.bulk_import_service import BulkImportError, BulkImportService
@@ -31,11 +32,12 @@ router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
 
 def _build_user_me_out(user: User, stats) -> UserMeOut:
-    return UserMeOut.model_validate(user).model_copy(
-        update={
-            "stats": stats,
-            "requires_location_setup": requires_location_setup(user),
-        }
+    base = UserOut.model_validate(user, from_attributes=True)
+    payload = base.model_dump(exclude={"requires_location_setup"})
+    return UserMeOut(
+        **payload,
+        stats=stats,
+        requires_location_setup=requires_location_setup(user),
     )
 
 
