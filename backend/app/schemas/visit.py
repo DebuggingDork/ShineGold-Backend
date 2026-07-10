@@ -72,6 +72,11 @@ class VisitSubmitResponse(BaseModel):
     duration_seconds: int
 
 
+class VisitCancelResponse(BaseModel):
+    visit_id: uuid.UUID
+    status: VisitStatus
+
+
 class VisitFarmSummary(BaseModel):
     id: uuid.UUID
     name: str

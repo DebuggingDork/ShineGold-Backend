@@ -134,6 +134,12 @@ class VisitRepository:
         await self.db.refresh(visit)
         return updated_fields
 
+    async def cancel(self, visit: Visit) -> Visit:
+        visit.status = VisitStatus.CANCELLED
+        await self.db.flush()
+        await self.db.refresh(visit)
+        return visit
+
     async def submit(
         self,
         visit: Visit,

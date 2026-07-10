@@ -58,7 +58,12 @@ class VisitFormQuestion(Base):
     label: Mapped[str] = mapped_column(String(500), nullable=False)
     help_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     question_type: Mapped[FormQuestionType] = mapped_column(
-        Enum(FormQuestionType, name="form_question_type"), nullable=False
+        Enum(
+            FormQuestionType,
+            name="form_question_type",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
     )
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_required: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -104,7 +109,12 @@ class VisitFormAnswer(Base):
     question_key: Mapped[str] = mapped_column(String(100), nullable=False)
     question_label: Mapped[str] = mapped_column(String(500), nullable=False)
     question_type: Mapped[FormQuestionType] = mapped_column(
-        Enum(FormQuestionType, name="form_question_type"), nullable=False
+        Enum(
+            FormQuestionType,
+            name="form_question_type",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
     )
     answer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     answer_json: Mapped[dict | list | None] = mapped_column(JSONB, nullable=True)

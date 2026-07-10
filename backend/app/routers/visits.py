@@ -17,6 +17,7 @@ from app.schemas.common import PaginatedResponse
 from app.schemas.visit import (
     CheckinRequest,
     CheckinResponse,
+    VisitCancelResponse,
     VisitDetailOut,
     VisitFormResponse,
     VisitFormUpdate,
@@ -157,6 +158,21 @@ async def update_visit_form(
         status=visit.status,
         updated_fields=updated_fields,
     )
+
+
+@router.post("/{visit_id}/cancel", response_model=VisitCancelResponse)
+async def cancel_visit(
+    visit_id: uuid.UUID,
+    current_user: User = Depends(require_executive),
+    db: AsyncSession = Depends(get_db),
+):
+    visit_repo = VisitRepository(db)
+    visit = _require_in_progress_visit(
+        await visit_repo.get_by_id(visit_id), current_user.id
+    )
+    visit = await visit_repo.cancel(visit)
+    await db.commit()
+    return VisitCancelResponse(visit_id=visit.id, status=visit.status)
 
 
 @router.post("/{visit_id}/submit", response_model=VisitSubmitResponse)
