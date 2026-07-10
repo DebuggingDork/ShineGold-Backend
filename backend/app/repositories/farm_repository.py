@@ -4,6 +4,7 @@ from typing import Literal
 
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import inspect as orm_inspect
 from sqlalchemy.orm import selectinload
 
 from app.core.geo import haversine_km
@@ -48,6 +49,14 @@ class FarmRepository:
     def assigned_executive_ids(farm: Farm) -> list[uuid.UUID]:
         return [assignment.executive_id for assignment in farm.executive_assignments]
 
+    async def list_assigned_executive_ids(self, farm_id: uuid.UUID) -> list[uuid.UUID]:
+        result = await self.db.execute(
+            select(FarmExecutiveAssignment.executive_id).where(
+                FarmExecutiveAssignment.farm_id == farm_id
+            )
+        )
+        return list(result.scalars().all())
+
     async def create(
         self,
         payload: FarmCreate,
@@ -55,6 +64,7 @@ class FarmRepository:
         onboarded_by: uuid.UUID | None,
         executive_ids: list[uuid.UUID] | None = None,
         assigned_by: uuid.UUID | None = None,
+        assign_onboarder: bool = True,
     ) -> tuple[Farm, Farmer]:
         farm = Farm(
             name=payload.name,
@@ -91,7 +101,7 @@ class FarmRepository:
                 assigned_by=assigned_by,
                 mode="replace",
             )
-        elif onboarded_by is not None:
+        elif assign_onboarder and onboarded_by is not None:
             await self.add_executive_assignment(
                 farm,
                 onboarded_by,
@@ -109,7 +119,13 @@ class FarmRepository:
         *,
         assigned_by: uuid.UUID | None = None,
     ) -> Farm:
-        if self.is_executive_assigned(farm, executive_id):
+        existing = await self.db.execute(
+            select(FarmExecutiveAssignment.id).where(
+                FarmExecutiveAssignment.farm_id == farm.id,
+                FarmExecutiveAssignment.executive_id == executive_id,
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
             return farm
 
         self.db.add(
@@ -132,7 +148,7 @@ class FarmRepository:
         mode: Literal["replace", "add", "remove"] = "replace",
     ) -> Farm:
         unique_ids = list(dict.fromkeys(executive_ids))
-        current_ids = set(self.assigned_executive_ids(farm))
+        current_ids = set(await self.list_assigned_executive_ids(farm.id))
 
         if mode == "replace":
             target_ids = set(unique_ids)
@@ -353,6 +369,12 @@ class FarmRepository:
         return within_radius[offset : offset + page_size], total
 
     @staticmethod
+    def _loaded_executive_assignments(farm: Farm) -> list:
+        if "executive_assignments" in orm_inspect(farm).unloaded:
+            return []
+        return list(farm.executive_assignments or [])
+
+    @staticmethod
     def to_list_item(
         farm: Farm, distance_km: float | None, last_visited: datetime | None
     ) -> dict:
@@ -369,7 +391,7 @@ class FarmRepository:
                 id=assignment.executive.id,
                 name=assignment.executive.name,
             )
-            for assignment in farm.executive_assignments
+            for assignment in FarmRepository._loaded_executive_assignments(farm)
             if assignment.executive is not None
         ]
         primary_executive = assigned_executives[0] if assigned_executives else None

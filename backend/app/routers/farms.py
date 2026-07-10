@@ -46,7 +46,7 @@ async def onboard_farm(
         name=farm.name,
         status=farm.status,
         farmer_id=farmer.id,
-        assigned_executive_ids=FarmRepository.assigned_executive_ids(farm),
+        assigned_executive_ids=await farm_repo.list_assigned_executive_ids(farm.id),
         created_at=farm.created_at,
     )
 
@@ -71,6 +71,7 @@ async def create_farm_as_admin(
         onboarded_by=current_user.id,
         executive_ids=payload.executive_ids,
         assigned_by=current_user.id,
+        assign_onboarder=False,
     )
     await db.commit()
 
@@ -79,7 +80,7 @@ async def create_farm_as_admin(
         name=farm.name,
         status=farm.status,
         farmer_id=farmer.id,
-        assigned_executive_ids=FarmRepository.assigned_executive_ids(farm),
+        assigned_executive_ids=await farm_repo.list_assigned_executive_ids(farm.id),
         created_at=farm.created_at,
     )
 
@@ -141,9 +142,10 @@ async def accept_farm_invitation(
         raise_bad_request(str(e))
 
     await db.commit()
+    farm_repo = FarmRepository(db)
     return FarmAcceptOut(
         farm_id=farm.id,
-        assigned_executive_ids=FarmRepository.assigned_executive_ids(farm),
+        assigned_executive_ids=await farm_repo.list_assigned_executive_ids(farm.id),
         distance_km=distance_km,
     )
 
@@ -307,7 +309,8 @@ async def assign_farm_executives(
         raise_bad_request(str(e))
 
     await db.commit()
+    farm_repo = FarmRepository(db)
     return FarmAssignOut(
         farm_id=farm.id,
-        assigned_executive_ids=FarmRepository.assigned_executive_ids(farm),
+        assigned_executive_ids=await farm_repo.list_assigned_executive_ids(farm.id),
     )

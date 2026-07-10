@@ -19,7 +19,13 @@ class Visit(Base):
     executive_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     status: Mapped[VisitStatus] = mapped_column(
-        Enum(VisitStatus, name="visit_status"), default=VisitStatus.IN_PROGRESS, nullable=False
+        Enum(
+            VisitStatus,
+            name="visit_status",
+            values_callable=lambda enum_cls: [member.name for member in enum_cls],
+        ),
+        default=VisitStatus.IN_PROGRESS,
+        nullable=False,
     )
 
     checkin_lat: Mapped[float] = mapped_column(Float, nullable=False)

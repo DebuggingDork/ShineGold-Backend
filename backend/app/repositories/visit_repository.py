@@ -146,6 +146,12 @@ class VisitRepository:
         checkout_lat: float,
         checkout_lng: float,
     ) -> Visit:
+        if visit.farm is None:
+            loaded = await self.get_by_id(visit.id)
+            if loaded is None:
+                raise ValueError("Visit not found")
+            visit = loaded
+
         checkout_time = datetime.now(timezone.utc)
         checkin_time = visit.checkin_time
         if checkin_time.tzinfo is None:
@@ -160,6 +166,12 @@ class VisitRepository:
         if visit.farm.status == FarmStatus.PENDING_VISIT:
             visit.farm.status = FarmStatus.VISITED
 
+        await self.db.flush()
+        await self.db.refresh(visit)
+        return visit
+
+    async def cancel(self, visit: Visit) -> Visit:
+        visit.status = VisitStatus.CANCELLED
         await self.db.flush()
         await self.db.refresh(visit)
         return visit

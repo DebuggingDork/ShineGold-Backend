@@ -206,3 +206,19 @@ async def submit_visit(
         checkout_time=visit.checkout_time,
         duration_seconds=visit.duration_seconds,
     )
+
+
+@router.post("/{visit_id}/cancel", response_model=VisitCancelResponse)
+async def cancel_visit(
+    visit_id: uuid.UUID,
+    current_user: User = Depends(require_executive),
+    db: AsyncSession = Depends(get_db),
+):
+    visit_repo = VisitRepository(db)
+    visit = _require_in_progress_visit(
+        await visit_repo.get_by_id(visit_id), current_user.id
+    )
+    visit = await visit_repo.cancel(visit)
+    await db.commit()
+
+    return VisitCancelResponse(visit_id=visit.id, status=visit.status)
