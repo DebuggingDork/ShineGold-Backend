@@ -26,3 +26,6 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "ruff>=0.15.19",
 ]
+
+[tool.fastapi]
+port = 8080
