@@ -58,6 +58,7 @@ def test_presign_uploads() -> list[tuple[str, bool, str]]:
         cases = [
             ("visit_photo", "image/jpeg", tiny_jpeg()),
             ("visit_voice", "audio/mpeg", tiny_mp3_header()),
+            ("visit_voice", "audio/wav", b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 16),
             ("profile_photo", "image/jpeg", tiny_jpeg()),
             ("farm_photo", "image/jpeg", tiny_jpeg()),
         ]
