@@ -1,0 +1,18 @@
+---
+description: Git commits must look author-only — no AI or Cursor attribution
+alwaysApply: true
+---
+
+# Git commit authorship
+
+When the user asks you to commit:
+
+- Commit messages must read as if **the user** wrote them — plain description of the change only.
+- **Never** add `Co-authored-by`, `Signed-off-by`, or any other trailer attributing Cursor, AI, or tooling.
+- **Never** use `git commit --trailer` or `--trailers`.
+- **Never** add watermarks like "Made with Cursor" in commit messages.
+- Use only `git commit -m "message"` (or HEREDOC for multi-line). No extra flags that modify authorship.
+
+If a commit hook or environment injects a Co-authored-by trailer, do not use that path — use a plain commit command the user would run themselves.
+
+Only commit when the user explicitly asks.
