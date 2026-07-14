@@ -68,3 +68,13 @@ async def require_executive(current_user: User = Depends(get_current_user)) -> U
             detail="Executive access required",
         )
     return current_user
+
+
+async def require_field_operator(current_user: User = Depends(get_current_user)) -> User:
+    """Executive or super admin — for farm visits / check-ins."""
+    if current_user.role not in (UserRole.EXECUTIVE, UserRole.SUPER_ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Field operator access required",
+        )
+    return current_user

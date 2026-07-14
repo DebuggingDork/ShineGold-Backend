@@ -4,7 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_db, require_executive
+from app.core.dependencies import get_current_user, get_db, require_field_operator
 from app.models.enums import UserRole, VisitStatus
 from app.models.user import User
 from app.models.visit import Visit
@@ -48,7 +48,7 @@ def _require_in_progress_visit(visit: Visit | None, executive_id: uuid.UUID) -> 
 @router.post("/checkin", response_model=CheckinResponse, status_code=status.HTTP_201_CREATED)
 async def checkin(
     payload: CheckinRequest,
-    current_user: User = Depends(require_executive),
+    current_user: User = Depends(require_field_operator),
     db: AsyncSession = Depends(get_db),
 ):
     farm_repo = FarmRepository(db)
@@ -94,7 +94,7 @@ async def list_my_visits(
     farm_name: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(require_executive),
+    current_user: User = Depends(require_field_operator),
     db: AsyncSession = Depends(get_db),
 ):
     visit_repo = VisitRepository(db)
@@ -135,7 +135,7 @@ async def get_visit(
 async def update_visit_form(
     visit_id: uuid.UUID,
     payload: VisitFormUpdate,
-    current_user: User = Depends(require_executive),
+    current_user: User = Depends(require_field_operator),
     db: AsyncSession = Depends(get_db),
 ):
     visit_repo = VisitRepository(db)
@@ -163,7 +163,7 @@ async def update_visit_form(
 @router.post("/{visit_id}/cancel", response_model=VisitCancelResponse)
 async def cancel_visit(
     visit_id: uuid.UUID,
-    current_user: User = Depends(require_executive),
+    current_user: User = Depends(require_field_operator),
     db: AsyncSession = Depends(get_db),
 ):
     visit_repo = VisitRepository(db)
@@ -179,7 +179,7 @@ async def cancel_visit(
 async def submit_visit(
     visit_id: uuid.UUID,
     payload: VisitSubmitRequest,
-    current_user: User = Depends(require_executive),
+    current_user: User = Depends(require_field_operator),
     db: AsyncSession = Depends(get_db),
 ):
     visit_repo = VisitRepository(db)
@@ -206,19 +206,3 @@ async def submit_visit(
         checkout_time=visit.checkout_time,
         duration_seconds=visit.duration_seconds,
     )
-
-
-@router.post("/{visit_id}/cancel", response_model=VisitCancelResponse)
-async def cancel_visit(
-    visit_id: uuid.UUID,
-    current_user: User = Depends(require_executive),
-    db: AsyncSession = Depends(get_db),
-):
-    visit_repo = VisitRepository(db)
-    visit = _require_in_progress_visit(
-        await visit_repo.get_by_id(visit_id), current_user.id
-    )
-    visit = await visit_repo.cancel(visit)
-    await db.commit()
-
-    return VisitCancelResponse(visit_id=visit.id, status=visit.status)

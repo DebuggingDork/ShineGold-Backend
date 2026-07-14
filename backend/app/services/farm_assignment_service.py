@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.geo import haversine_km
+from app.models.enums import UserRole
 from app.models.farm import Farm
 from app.models.user import User
 from app.repositories.farm_repository import FarmRepository
@@ -35,6 +36,8 @@ class FarmAssignmentService:
 
     @staticmethod
     def can_visit_farm(executive: User, farm: Farm) -> bool:
+        if executive.role == UserRole.SUPER_ADMIN:
+            return True
         return FarmRepository.is_executive_assigned(farm, executive.id)
 
     async def list_invitations(

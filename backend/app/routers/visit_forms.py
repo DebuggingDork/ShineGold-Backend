@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_db, require_executive, require_super_admin
+from app.core.dependencies import get_current_user, get_db, require_field_operator, require_super_admin
 from app.core.http import raise_bad_request, raise_not_found
 from app.models.user import User
 from app.repositories.visit_repository import VisitRepository
@@ -207,7 +207,7 @@ async def delete_visit_form_option(
 @router.get("/visits/{visit_id}/context", response_model=VisitFormContextOut)
 async def get_visit_form_context(
     visit_id: uuid.UUID,
-    current_user: User = Depends(require_executive),
+    current_user: User = Depends(require_field_operator),
     db: AsyncSession = Depends(get_db),
 ):
     visit_repo = VisitRepository(db)
