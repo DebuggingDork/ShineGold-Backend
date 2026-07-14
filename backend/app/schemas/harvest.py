@@ -18,3 +18,18 @@ class HarvestDayGroup(BaseModel):
 
 class HarvestCalendarOut(BaseModel):
     harvests: list[HarvestDayGroup]
+
+
+class HarvestReminderItem(BaseModel):
+    farm_id: uuid.UUID
+    farm_name: str
+    crop: str
+    harvest_type: str
+    harvest_date: date
+    remind_on: date
+    days_until_harvest: int
+
+
+class HarvestRemindersOut(BaseModel):
+    days_before: int
+    items: list[HarvestReminderItem]

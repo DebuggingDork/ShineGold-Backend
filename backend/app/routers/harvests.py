@@ -3,10 +3,10 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_db, require_super_admin
+from app.core.dependencies import get_db, require_field_operator, require_super_admin
 from app.models.user import User
 from app.repositories.harvest_repository import HarvestRepository
-from app.schemas.harvest import HarvestCalendarOut
+from app.schemas.harvest import HarvestCalendarOut, HarvestRemindersOut
 
 router = APIRouter(prefix="/api/v1/harvests", tags=["harvests"])
 
@@ -28,3 +28,19 @@ async def get_harvest_calendar(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
+@router.get("/reminders", response_model=HarvestRemindersOut)
+async def list_harvest_reminders(
+    days_before: int = Query(5, ge=1, le=30, description="Notify this many days before harvest"),
+    horizon_days: int = Query(90, ge=1, le=365, description="Look ahead window for scheduling"),
+    current_user: User = Depends(require_field_operator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Harvest reminders: executives get assigned farms; admins get all farms."""
+    harvest_repo = HarvestRepository(db)
+    return await harvest_repo.list_reminders(
+        user=current_user,
+        days_before=days_before,
+        horizon_days=horizon_days,
+    )
