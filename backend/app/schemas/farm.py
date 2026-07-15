@@ -84,6 +84,9 @@ class FarmListItem(BaseModel):
     distance_km: float | None = None
     farmer: FarmerListSummary | None = None
     last_visited: datetime | None = None
+    harvest_date: date
+    harvest_type: str
+    crop: str
     status: FarmStatus
     assigned_executive_id: uuid.UUID | None = None
     assigned_executive_name: str | None = None
