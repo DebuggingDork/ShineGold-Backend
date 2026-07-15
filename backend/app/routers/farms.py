@@ -4,7 +4,13 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_db, require_executive, require_super_admin
+from app.core.dependencies import (
+    get_current_user,
+    get_db,
+    require_executive,
+    require_field_operator,
+    require_super_admin,
+)
 from app.core.http import raise_bad_request, raise_not_found
 from app.core.config import settings
 from app.models.enums import FarmStatus, UserRole
@@ -23,6 +29,9 @@ from app.schemas.farm import (
     FarmInvitationItem,
     FarmListItem,
     FarmUpdate,
+    HarvestDateChangeOut,
+    HarvestDateUpdate,
+    HarvestDateUpdateOut,
 )
 from app.schemas.visit import VisitDetailOut, VisitHistoryItem
 from app.services.farm_assignment_service import FarmAssignmentError, FarmAssignmentService
@@ -258,7 +267,7 @@ async def get_farm(
 async def update_farm(
     farm_id: uuid.UUID,
     payload: FarmUpdate,
-    _current_user: User = Depends(require_super_admin),
+    current_user: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
     farm_repo = FarmRepository(db)
@@ -270,11 +279,102 @@ async def update_farm(
     if not update_data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
 
-    await farm_repo.update(farm, **update_data)
+    if "harvest_date" in update_data and update_data["harvest_date"] is not None:
+        try:
+            await farm_repo.update_harvest_date(
+                farm,
+                new_date=update_data["harvest_date"],
+                changed_by=current_user.id,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+        update_data.pop("harvest_date")
+
+    if update_data:
+        await farm_repo.update(farm, **update_data)
+
     await db.commit()
 
     updated_farm = await farm_repo.get_by_id(farm_id)
     return FarmRepository.to_detail(updated_farm)
+
+
+@router.patch("/{farm_id}/harvest-date", response_model=HarvestDateUpdateOut)
+async def update_farm_harvest_date(
+    farm_id: uuid.UUID,
+    payload: HarvestDateUpdate,
+    current_user: User = Depends(require_field_operator),
+    db: AsyncSession = Depends(get_db),
+):
+    """Assigned executives and super admins can reschedule harvest dates."""
+    farm_repo = FarmRepository(db)
+    farm = await farm_repo.get_by_id(farm_id)
+    if farm is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
+
+    if current_user.role == UserRole.EXECUTIVE and not FarmRepository.is_executive_assigned(
+        farm, current_user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not assigned to this farm",
+        )
+
+    try:
+        entry = await farm_repo.update_harvest_date(
+            farm,
+            new_date=payload.harvest_date,
+            changed_by=current_user.id,
+            reason=payload.reason,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    await db.commit()
+
+    # Reload changer name for response.
+    history, _ = await farm_repo.list_harvest_date_history(farm_id, page=1, page_size=1)
+    change = FarmRepository.to_harvest_date_change(history[0] if history else entry)
+    return HarvestDateUpdateOut(
+        farm_id=farm.id,
+        harvest_date=farm.harvest_date,
+        change=change,
+    )
+
+
+@router.get(
+    "/{farm_id}/harvest-date-history",
+    response_model=PaginatedResponse[HarvestDateChangeOut],
+)
+async def list_farm_harvest_date_history(
+    farm_id: uuid.UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(require_field_operator),
+    db: AsyncSession = Depends(get_db),
+):
+    farm_repo = FarmRepository(db)
+    farm = await farm_repo.get_by_id(farm_id)
+    if farm is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Farm not found")
+
+    if current_user.role == UserRole.EXECUTIVE and not FarmRepository.is_executive_assigned(
+        farm, current_user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not assigned to this farm",
+        )
+
+    items, total = await farm_repo.list_harvest_date_history(
+        farm_id, page=page, page_size=page_size
+    )
+    return PaginatedResponse(
+        items=[FarmRepository.to_harvest_date_change(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.patch("/{farm_id}/assign", response_model=FarmAssignOut)
