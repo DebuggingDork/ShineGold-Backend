@@ -13,7 +13,10 @@ class UserBase(BaseModel):
 
 
 class UserCreate(BaseModel):
-    employee_id: str
+    """Create an executive. employee_id is optional — when omitted the server
+    assigns the next EXEC### in sequence."""
+
+    employee_id: str | None = None
     name: str
     address: str
     password: str
