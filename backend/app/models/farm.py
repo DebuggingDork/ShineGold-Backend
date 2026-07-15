@@ -50,6 +50,11 @@ class Farm(Base):
     onboarded_by_user = relationship("User", back_populates="onboarded_farms", foreign_keys=[onboarded_by])
     farmer = relationship("Farmer", back_populates="farm", uselist=False, cascade="all, delete-orphan")
     visits = relationship("Visit", back_populates="farm")
+    harvest_date_history = relationship(
+        "HarvestDateHistory",
+        back_populates="farm",
+        cascade="all, delete-orphan",
+    )
 
 
 class Farmer(Base):
