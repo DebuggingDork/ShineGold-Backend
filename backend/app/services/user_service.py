@@ -24,12 +24,23 @@ class UserService:
         if payload.role != UserRole.EXECUTIVE:
             raise UserServiceError("Only executive accounts can be created via this endpoint")
 
-        existing = await self.user_repo.get_by_employee_id(payload.employee_id)
-        if existing is not None:
-            raise UserServiceError("An account with this employee ID already exists")
+        employee_id = (payload.employee_id or "").strip()
+        if employee_id:
+            existing = await self.user_repo.get_by_employee_id(employee_id)
+            if existing is not None:
+                raise UserServiceError("An account with this employee ID already exists")
+        else:
+            # Allocate the next EXEC### with a short retry in case of a race.
+            for _ in range(5):
+                employee_id = await self.user_repo.next_executive_employee_id()
+                existing = await self.user_repo.get_by_employee_id(employee_id)
+                if existing is None:
+                    break
+            else:
+                raise UserServiceError("Could not allocate a unique employee ID. Try again.")
 
         user = User(
-            employee_id=payload.employee_id,
+            employee_id=employee_id,
             name=payload.name,
             address=payload.address,
             password_hash=hash_password(payload.password),
