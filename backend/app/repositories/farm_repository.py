@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from sqlalchemy import and_, delete, func, or_, select
@@ -11,6 +11,7 @@ from app.core.geo import haversine_km
 from app.models.enums import FarmStatus, VisitStatus
 from app.models.farm import Farm, Farmer
 from app.models.farm_executive_assignment import FarmExecutiveAssignment
+from app.models.harvest_date_history import HarvestDateHistory
 from app.models.visit import Visit
 from app.schemas.farm import (
     ExecutiveSummary,
@@ -19,6 +20,7 @@ from app.schemas.farm import (
     FarmLocation,
     FarmerListSummary,
     FarmerOut,
+    HarvestDateChangeOut,
     VisitLogItem,
 )
 
@@ -194,6 +196,69 @@ class FarmRepository:
         await self.db.flush()
         await self.db.refresh(farm)
         return farm
+
+    async def update_harvest_date(
+        self,
+        farm: Farm,
+        *,
+        new_date: date,
+        changed_by: uuid.UUID,
+        reason: str | None = None,
+    ) -> HarvestDateHistory:
+        """Update harvest_date and append an audit row in the same transaction."""
+        if farm.harvest_date == new_date:
+            raise ValueError("Harvest date is unchanged")
+
+        old_date = farm.harvest_date
+        farm.harvest_date = new_date
+        entry = HarvestDateHistory(
+            farm_id=farm.id,
+            old_date=old_date,
+            new_date=new_date,
+            changed_by=changed_by,
+            reason=(reason.strip() if reason and reason.strip() else None),
+        )
+        self.db.add(entry)
+        await self.db.flush()
+        await self.db.refresh(entry)
+        await self.db.refresh(farm)
+        return entry
+
+    async def list_harvest_date_history(
+        self,
+        farm_id: uuid.UUID,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[HarvestDateHistory], int]:
+        filters = [HarvestDateHistory.farm_id == farm_id]
+        count_result = await self.db.execute(
+            select(func.count()).select_from(HarvestDateHistory).where(*filters)
+        )
+        total = count_result.scalar_one()
+        result = await self.db.execute(
+            select(HarvestDateHistory)
+            .where(*filters)
+            .options(selectinload(HarvestDateHistory.changed_by_user))
+            .order_by(HarvestDateHistory.changed_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return list(result.scalars().all()), total
+
+    @staticmethod
+    def to_harvest_date_change(entry: HarvestDateHistory) -> HarvestDateChangeOut:
+        changer = entry.changed_by_user
+        return HarvestDateChangeOut(
+            id=entry.id,
+            farm_id=entry.farm_id,
+            old_date=entry.old_date,
+            new_date=entry.new_date,
+            changed_by_id=entry.changed_by,
+            changed_by_name=changer.name if changer is not None else "Unknown",
+            reason=entry.reason,
+            changed_at=entry.changed_at,
+        )
 
     async def transfer_assigned_farms(
         self,
