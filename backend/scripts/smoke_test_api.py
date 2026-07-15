@@ -102,6 +102,25 @@ def main() -> int:
         )
         record("GET", "/api/v1/harvests/calendar", r.status_code, r.status_code == 200)
 
+        r = client.get(
+            f"{BASE}/api/v1/harvests/reminders",
+            headers=exec_headers,
+            params={"days_before": 5, "horizon_days": 90},
+        )
+        ok = r.status_code == 200
+        note = ""
+        if ok:
+            items = r.json().get("items") or []
+            note = f"({len(items)} reminders)"
+        record("GET", "/api/v1/harvests/reminders", r.status_code, ok, note)
+
+        r = client.get(
+            f"{BASE}/api/v1/harvests/reminders",
+            headers=admin_headers,
+            params={"days_before": 5, "horizon_days": 90},
+        )
+        record("GET", "/api/v1/harvests/reminders (admin)", r.status_code, r.status_code == 200)
+
         users_r = get("/api/v1/users", admin_headers)
         users = parse_items(users_r.json()) if users_r.status_code == 200 else []
         if not users and users_r.status_code == 200:
