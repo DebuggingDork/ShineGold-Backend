@@ -171,3 +171,25 @@ class FarmDetailOut(BaseModel):
 
 class FarmUpdate(BaseModel):
     harvest_date: date | None = None
+
+
+class HarvestDateUpdate(BaseModel):
+    harvest_date: date
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class HarvestDateChangeOut(BaseModel):
+    id: uuid.UUID
+    farm_id: uuid.UUID
+    old_date: date
+    new_date: date
+    changed_by_id: uuid.UUID
+    changed_by_name: str
+    reason: str | None = None
+    changed_at: datetime
+
+
+class HarvestDateUpdateOut(BaseModel):
+    farm_id: uuid.UUID
+    harvest_date: date
+    change: HarvestDateChangeOut
