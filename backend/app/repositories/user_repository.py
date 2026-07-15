@@ -29,6 +29,28 @@ class UserRepository:
         result = await self.db.execute(select(User).where(User.employee_id == employee_id))
         return result.scalar_one_or_none()
 
+    async def next_executive_employee_id(self, *, prefix: str = "EXEC") -> str:
+        """Return the next sequential ID like EXEC001, EXEC002, ….
+
+        Scans existing employee_ids that match ``PREFIX`` + digits and picks
+        max(number) + 1. Falls back to EXEC001 when none exist.
+        """
+        import re
+
+        result = await self.db.execute(select(User.employee_id))
+        ids = [row[0] for row in result.all() if row[0]]
+        pattern = re.compile(rf"^{re.escape(prefix)}(\d+)$", re.IGNORECASE)
+        max_n = 0
+        width = 3
+        for employee_id in ids:
+            match = pattern.match(employee_id.strip())
+            if not match:
+                continue
+            digits = match.group(1)
+            width = max(width, len(digits))
+            max_n = max(max_n, int(digits))
+        return f"{prefix}{max_n + 1:0{width}d}"
+
     async def create(self, user: User) -> User:
         self.db.add(user)
         await self.db.flush()
