@@ -42,7 +42,9 @@ class ForgotPasswordResponse(BaseModel):
 
 
 class ApproveResetRequest(BaseModel):
-    temp_password: str
+    """Admin approval only — executive sets their own password afterward."""
+
+    pass
 
 
 class ApproveResetResponse(BaseModel):
@@ -72,5 +74,11 @@ class PasswordResetStatusOut(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
+    new_password: str
+    confirm_password: str
+
+
+class SetPasswordAfterResetRequest(BaseModel):
+    employee_id: str
     new_password: str
     confirm_password: str

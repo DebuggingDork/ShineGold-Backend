@@ -19,12 +19,13 @@ INSTRUCTIONS = [
     ("Column", "Required", "Description"),
     ("employee_id", "Yes", "Unique login ID for the executive (e.g. EMP1001)"),
     ("name", "Yes", "Full name of the executive"),
-    ("address", "Yes", "Office or base address (text only — used for records)"),
+    ("address", "Yes", "Office/base address text — include area, city, PIN when possible"),
     ("mobile_number", "No", "Contact number"),
     ("", "", ""),
-    ("Note", "", "Latitude/longitude are NOT entered in Excel."),
-    ("", "", "After first login, the executive pins their location in the app."),
-    ("", "", "That GPS point is used to sort farms by distance from home."),
+    ("Note", "", "Nearby-farm ranking uses GPS (home_lat / home_lng), not address or PIN alone."),
+    ("", "", "Latitude/longitude are NOT entered in Excel."),
+    ("", "", "After first login, the executive pins their location in the app,"),
+    ("", "", "or an admin can set the home GPS pin when creating the account."),
 ]
 
 
@@ -214,13 +215,27 @@ class BulkImportService:
                 )
                 continue
 
+            if row.mobile_number:
+                existing_mobile = await self.user_repo.get_by_mobile_number(row.mobile_number)
+                if existing_mobile is not None:
+                    skipped += 1
+                    errors.append(
+                        BulkImportRowError(
+                            row=row.row_number,
+                            employee_id=row.employee_id,
+                            reason="Executive already exists (mobile number in use)",
+                        )
+                    )
+                    continue
+
             user = User(
                 employee_id=row.employee_id,
                 name=row.name,
                 address=row.address,
                 password_hash=hash_password(default_password),
                 role=UserRole.EXECUTIVE,
-                mobile_number=row.mobile_number,
+                mobile_number=UserRepository.normalize_mobile(row.mobile_number)
+                or row.mobile_number,
             )
             created = await self.user_repo.create(user)
             created_users.append(

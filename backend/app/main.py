@@ -1,7 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, dashboard, farmers, farms, harvests, uploads, users, visit_forms, visits
+from app.routers import (
+    auth,
+    dashboard,
+    farmers,
+    farms,
+    geo,
+    harvests,
+    uploads,
+    users,
+    visit_forms,
+    visits,
+)
 
 app = FastAPI(title="ShineGold API", version="0.1.0")
 
@@ -22,6 +33,7 @@ app.include_router(visit_forms.router)
 app.include_router(farmers.router)
 app.include_router(harvests.router)
 app.include_router(dashboard.router)
+app.include_router(geo.router)
 
 
 @app.get("/health")

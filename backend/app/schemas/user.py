@@ -14,14 +14,23 @@ class UserBase(BaseModel):
 
 class UserCreate(BaseModel):
     """Create an executive. employee_id is optional — when omitted the server
-    assigns the next EXEC### in sequence."""
+    assigns the next EXEC### in sequence.
+
+    Nearby-farm ranking uses home_lat/home_lng (haversine), not address text.
+    Address is required for records. home_lat/home_lng are required so nearby
+    farms work immediately after create.
+    """
 
     employee_id: str | None = None
     name: str
     address: str
-    password: str
-    mobile_number: str | None = None
+    password: str = Field(min_length=6)
+    mobile_number: str
     role: UserRole = UserRole.EXECUTIVE
+    home_lat: float = Field(validation_alias=AliasChoices("home_lat", "latitude"))
+    home_lng: float = Field(validation_alias=AliasChoices("home_lng", "longitude"))
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class UserCreateOut(BaseModel):
@@ -112,6 +121,9 @@ class UserDetailOut(BaseModel):
     name: str
     mobile_number: str | None = None
     profile_photo_url: str | None = None
+    address: str | None = None
+    home_lat: float | None = None
+    home_lng: float | None = None
     is_blocked: bool
     visit_history: list[UserVisitHistoryItem] = []
     assigned_farms: list[UserAssignedFarmItem] = []

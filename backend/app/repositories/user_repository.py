@@ -29,6 +29,32 @@ class UserRepository:
         result = await self.db.execute(select(User).where(User.employee_id == employee_id))
         return result.scalar_one_or_none()
 
+    @staticmethod
+    def normalize_mobile(mobile: str | None) -> str | None:
+        """Normalize to digits-only; prefer last 10 digits for Indian numbers."""
+        if mobile is None:
+            return None
+        digits = "".join(ch for ch in mobile.strip() if ch.isdigit())
+        if not digits:
+            return None
+        if len(digits) > 10:
+            digits = digits[-10:]
+        return digits
+
+    async def get_by_mobile_number(self, mobile: str | None) -> User | None:
+        """Match users by normalized mobile (last 10 digits)."""
+        needle = self.normalize_mobile(mobile)
+        if needle is None:
+            return None
+
+        result = await self.db.execute(
+            select(User).where(User.mobile_number.is_not(None))
+        )
+        for user in result.scalars().all():
+            if self.normalize_mobile(user.mobile_number) == needle:
+                return user
+        return None
+
     async def next_executive_employee_id(self, *, prefix: str = "EXEC") -> str:
         """Return the next sequential ID like EXEC001, EXEC002, ….
 
@@ -210,6 +236,9 @@ class UserRepository:
             name=executive.name,
             mobile_number=executive.mobile_number,
             profile_photo_url=executive.profile_photo_url,
+            address=executive.address,
+            home_lat=executive.home_lat,
+            home_lng=executive.home_lng,
             is_blocked=executive.is_blocked,
             visit_history=visit_history,
             assigned_farms=assigned_farms,

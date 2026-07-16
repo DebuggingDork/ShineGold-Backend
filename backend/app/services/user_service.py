@@ -39,13 +39,28 @@ class UserService:
             else:
                 raise UserServiceError("Could not allocate a unique employee ID. Try again.")
 
+        if payload.home_lat is None or payload.home_lng is None:
+            raise UserServiceError(
+                "home_lat and home_lng are required. Verify the address before creating the executive."
+            )
+
+        mobile = (payload.mobile_number or "").strip()
+        if not mobile:
+            raise UserServiceError("Mobile number is required")
+        existing_mobile = await self.user_repo.get_by_mobile_number(mobile)
+        if existing_mobile is not None:
+            raise UserServiceError("Executive already exists")
+        mobile = UserRepository.normalize_mobile(mobile) or mobile
+
         user = User(
             employee_id=employee_id,
             name=payload.name,
             address=payload.address,
             password_hash=hash_password(payload.password),
             role=UserRole.EXECUTIVE,
-            mobile_number=payload.mobile_number,
+            mobile_number=mobile,
+            home_lat=payload.home_lat,
+            home_lng=payload.home_lng,
         )
         return await self.user_repo.create(user)
 

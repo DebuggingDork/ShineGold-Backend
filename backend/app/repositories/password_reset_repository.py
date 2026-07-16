@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -75,6 +75,46 @@ class PasswordResetRepository:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    async def get_open_approved_for_user(
+        self, user_id: uuid.UUID
+    ) -> PasswordResetRequest | None:
+        """Latest approved reset that has not been consumed yet."""
+        result = await self.db.execute(
+            select(PasswordResetRequest)
+            .where(
+                PasswordResetRequest.user_id == user_id,
+                PasswordResetRequest.status == PasswordResetStatus.APPROVED,
+                (
+                    or_(
+                        PasswordResetRequest.temp_password_hash.is_(None),
+                        PasswordResetRequest.temp_password_hash != "__used__",
+                    )
+                ),
+            )
+            .order_by(PasswordResetRequest.requested_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_open_approved_for_user(
+        self, user_id: uuid.UUID
+    ) -> list[PasswordResetRequest]:
+        result = await self.db.execute(
+            select(PasswordResetRequest)
+            .where(
+                PasswordResetRequest.user_id == user_id,
+                PasswordResetRequest.status == PasswordResetStatus.APPROVED,
+                (
+                    or_(
+                        PasswordResetRequest.temp_password_hash.is_(None),
+                        PasswordResetRequest.temp_password_hash != "__used__",
+                    )
+                ),
+            )
+            .order_by(PasswordResetRequest.requested_at.desc())
+        )
+        return list(result.scalars().all())
 
     async def resolve(
         self,

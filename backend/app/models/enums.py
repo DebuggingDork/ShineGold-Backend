@@ -28,6 +28,7 @@ class PasswordResetStatus(str, enum.Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+    COMPLETED = "completed"
 
 
 class FormQuestionType(str, enum.Enum):

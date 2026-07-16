@@ -9,7 +9,6 @@ from app.core.user_helpers import requires_location_setup
 from app.models.enums import PasswordResetStatus
 from app.models.user import User
 from app.schemas.auth import (
-    ApproveResetRequest,
     ApproveResetResponse,
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -20,6 +19,7 @@ from app.schemas.auth import (
     PasswordResetStatusOut,
     RefreshRequest,
     RefreshResponse,
+    SetPasswordAfterResetRequest,
     TokenResponse,
 )
 from app.schemas.common import PaginatedResponse
@@ -120,13 +120,13 @@ async def list_password_reset_requests(
 )
 async def approve_password_reset(
     request_id: uuid.UUID,
-    payload: ApproveResetRequest,
     _current_user: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    """Approve a reset request. Executive sets their own password afterward."""
     reset_service = PasswordResetService(db)
     try:
-        request = await reset_service.approve(request_id, payload.temp_password)
+        request = await reset_service.approve(request_id)
         await db.commit()
     except PasswordResetError as e:
         message = str(e)
@@ -135,9 +135,34 @@ async def approve_password_reset(
         raise_bad_request(message)
 
     return ApproveResetResponse(
-        message="Password reset approved",
+        message="Password reset approved. The executive can now set a new password.",
         request_id=request.id,
     )
+
+
+@router.post("/set-password-after-reset")
+async def set_password_after_reset(
+    payload: SetPasswordAfterResetRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Set a new password after admin approval — no login required (forgot-password flow)."""
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match",
+        )
+
+    reset_service = PasswordResetService(db)
+    try:
+        await reset_service.set_password_after_approval(
+            employee_id=payload.employee_id,
+            new_password=payload.new_password,
+        )
+        await db.commit()
+    except PasswordResetError as e:
+        raise_bad_request(str(e))
+
+    return {"message": "Password updated successfully"}
 
 
 @router.post("/change-password")
