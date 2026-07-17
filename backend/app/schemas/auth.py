@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.enums import PasswordResetStatus
 from app.schemas.user import UserOut
@@ -76,6 +76,11 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
     confirm_password: str
+
+
+class AdminChangePasswordRequest(BaseModel):
+    new_password: str = Field(min_length=6)
+    confirm_password: str = Field(min_length=6)
 
 
 class SetPasswordAfterResetRequest(BaseModel):

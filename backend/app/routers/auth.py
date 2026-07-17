@@ -9,6 +9,7 @@ from app.core.user_helpers import requires_location_setup
 from app.models.enums import PasswordResetStatus
 from app.models.user import User
 from app.schemas.auth import (
+    AdminChangePasswordRequest,
     ApproveResetResponse,
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -162,6 +163,25 @@ async def set_password_after_reset(
     except PasswordResetError as e:
         raise_bad_request(str(e))
 
+    return {"message": "Password updated successfully"}
+
+
+@router.post("/admin/change-password")
+async def change_admin_password(
+    payload: AdminChangePasswordRequest,
+    current_admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Allow a signed-in super admin to replace their own password."""
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match",
+        )
+
+    auth_service = AuthService(db)
+    await auth_service.set_password(current_admin, payload.new_password)
+    await db.commit()
     return {"message": "Password updated successfully"}
 
 

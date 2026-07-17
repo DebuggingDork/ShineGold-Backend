@@ -53,3 +53,7 @@ class AuthService:
             raise AuthError("Current password is incorrect")
         user.password_hash = hash_password(new_password)
         await self.user_repo.update(user)
+
+    async def set_password(self, user: User, new_password: str) -> None:
+        user.password_hash = hash_password(new_password)
+        await self.user_repo.update(user)
