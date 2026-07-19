@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Literal, Self
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, computed_field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from app.models.enums import FarmStatus, Gender
 
@@ -12,7 +12,20 @@ class FarmerCreate(BaseModel):
     mobile_number: str
     gender: Gender
     age: int
+    aadhar_number: str | None = None
     photo_url: str | None = None
+
+    @field_validator("aadhar_number")
+    @classmethod
+    def validate_aadhar(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        digits = "".join(ch for ch in value.strip() if ch.isdigit())
+        if not digits:
+            return None
+        if len(digits) != 12:
+            raise ValueError("Aadhar number must be exactly 12 digits")
+        return digits
 
 
 class FarmerOut(BaseModel):
@@ -23,6 +36,7 @@ class FarmerOut(BaseModel):
     mobile_number: str
     gender: Gender
     age: int
+    aadhar_number: str | None = None
     photo_url: str | None = None
 
 
@@ -48,6 +62,7 @@ class FarmCreate(BaseModel):
     harvest_type: str
     harvest_date: date
     total_acres: float
+    plant_count: int | None = Field(default=None, ge=1)
     boundary_geojson: dict | None = None
     photos: list[str] | None = None
     farmer: FarmerCreate
@@ -71,6 +86,7 @@ class FarmCreateOut(BaseModel):
 class FarmerListSummary(BaseModel):
     name: str
     mobile_number: str
+    aadhar_number: str | None = None
     photo_url: str | None = None
 
 
@@ -150,6 +166,7 @@ class FarmDetailOut(BaseModel):
     location: FarmLocation
     boundary_geojson: dict | None = None
     total_acres: float
+    plant_count: int | None = None
     assigned_executives: list[ExecutiveSummary] = Field(default_factory=list)
     farmer: FarmerOut | None = None
     photos: list[str] | None = None

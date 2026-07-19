@@ -57,6 +57,7 @@ class FarmerRepository:
             id=farmer.id,
             name=farmer.name,
             mobile_number=farmer.mobile_number,
+            aadhar_number=farmer.aadhar_number,
             photo_url=farmer.photo_url,
             farms_count=1,
         )
@@ -80,6 +81,7 @@ class FarmerRepository:
             mobile_number=farmer.mobile_number,
             gender=farmer.gender,
             age=farmer.age,
+            aadhar_number=farmer.aadhar_number,
             photo_url=farmer.photo_url,
             farms=farms,
         )

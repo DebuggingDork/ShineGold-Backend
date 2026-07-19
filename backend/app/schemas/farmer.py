@@ -9,6 +9,7 @@ class FarmerListItem(BaseModel):
     id: uuid.UUID
     name: str
     mobile_number: str
+    aadhar_number: str | None = None
     photo_url: str | None = None
     farms_count: int
 
@@ -28,5 +29,6 @@ class FarmerDetailOut(BaseModel):
     mobile_number: str
     gender: Gender
     age: int
+    aadhar_number: str | None = None
     photo_url: str | None = None
     farms: list[FarmerFarmSummary] = []

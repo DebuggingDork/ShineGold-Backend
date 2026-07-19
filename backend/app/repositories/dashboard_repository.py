@@ -8,7 +8,12 @@ from app.models.farm import Farm, Farmer
 from app.models.farm_executive_assignment import FarmExecutiveAssignment
 from app.models.user import User
 from app.models.visit import Visit
-from app.schemas.dashboard import AdminDashboardOut, ExecutiveDashboardOut, UpcomingHarvest
+from app.schemas.dashboard import (
+    AdminDashboardOut,
+    ExecutiveDashboardOut,
+    OnboardedFarmSummary,
+    UpcomingHarvest,
+)
 
 
 class DashboardRepository:
@@ -52,11 +57,18 @@ class DashboardRepository:
             [User.role == UserRole.EXECUTIVE],
         )
 
+        acres_query = select(func.coalesce(func.sum(Farm.total_acres), 0.0))
+        if farm_filters:
+            acres_query = acres_query.where(*farm_filters)
+        acres_result = await self.db.execute(acres_query)
+        total_acres = float(acres_result.scalar_one() or 0)
+
         return AdminDashboardOut(
             total_farms=total_farms,
             total_executives=total_executives,
             total_visits=total_visits,
             farmers_onboarded=farmers_onboarded,
+            total_acres=round(total_acres, 2),
         )
 
     async def _count(self, model, filters: list) -> int:
@@ -108,6 +120,13 @@ class DashboardRepository:
         )
         upcoming_farms = list(upcoming_result.scalars().all())
 
+        onboarded_result = await self.db.execute(
+            select(Farm)
+            .where(Farm.onboarded_by == executive.id)
+            .order_by(Farm.created_at.desc())
+        )
+        onboarded_farms = list(onboarded_result.scalars().all())
+
         return ExecutiveDashboardOut(
             greeting_name=executive.name,
             date=today,
@@ -122,4 +141,16 @@ class DashboardRepository:
             ],
             farms_visited_count=farms_visited_count,
             pending_farms_count=pending_farms_count,
+            onboarded_farms_count=len(onboarded_farms),
+            onboarded_farms=[
+                OnboardedFarmSummary(
+                    farm_id=farm.id,
+                    farm_name=farm.name,
+                    crop=farm.crop,
+                    total_acres=farm.total_acres,
+                    status=farm.status.value,
+                    harvest_date=farm.harvest_date,
+                )
+                for farm in onboarded_farms[:20]
+            ],
         )

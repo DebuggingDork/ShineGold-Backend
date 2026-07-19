@@ -77,6 +77,7 @@ class FarmRepository:
             harvest_type=payload.harvest_type,
             harvest_date=payload.harvest_date,
             total_acres=payload.total_acres,
+            plant_count=payload.plant_count,
             boundary_geojson=payload.boundary_geojson,
             photos=payload.photos,
             onboarded_by=onboarded_by,
@@ -89,6 +90,7 @@ class FarmRepository:
             farm_id=farm.id,
             name=payload.farmer.name,
             mobile_number=payload.farmer.mobile_number,
+            aadhar_number=payload.farmer.aadhar_number,
             gender=payload.farmer.gender,
             age=payload.farmer.age,
             photo_url=payload.farmer.photo_url,
@@ -448,6 +450,7 @@ class FarmRepository:
             farmer_summary = FarmerListSummary(
                 name=farm.farmer.name,
                 mobile_number=farm.farmer.mobile_number,
+                aadhar_number=farm.farmer.aadhar_number,
                 photo_url=farm.farmer.photo_url,
             )
 
@@ -534,6 +537,7 @@ class FarmRepository:
             ),
             boundary_geojson=farm.boundary_geojson,
             total_acres=farm.total_acres,
+            plant_count=farm.plant_count,
             assigned_executives=assigned_executives,
             farmer=farmer,
             photos=farm.photos,

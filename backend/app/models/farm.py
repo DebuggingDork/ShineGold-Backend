@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, String, Date, func
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String, Date, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,6 +25,7 @@ class Farm(Base):
     harvest_type: Mapped[str] = mapped_column(String(255), nullable=False)
     harvest_date: Mapped[date] = mapped_column(Date, nullable=False)
     total_acres: Mapped[float] = mapped_column(Float, nullable=False)
+    plant_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     boundary_geojson: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     photos: Mapped[list | None] = mapped_column(JSONB, nullable=True)  # list[str] of URLs
@@ -68,6 +69,7 @@ class Farmer(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     mobile_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    aadhar_number: Mapped[str | None] = mapped_column(String(12), nullable=True)
     gender: Mapped[Gender] = mapped_column(Enum(Gender, name="gender"), nullable=False)
     age: Mapped[int] = mapped_column(nullable=False)
     photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
