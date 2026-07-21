@@ -1,7 +1,7 @@
 """
 End-to-end workflow test mirroring the Shine Gold Flutter app API calls.
 
-Run from backend/ (with API server on http://127.0.0.1:8011):
+Run from backend/ (with API server on http://127.0.0.1:8000 via `uv run fastapi dev`):
     uv run python scripts/e2e_workflow_test.py
 """
 from __future__ import annotations
@@ -15,9 +15,8 @@ from pathlib import Path
 
 import httpx
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-BASE = "http://127.0.0.1:8011"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from api_base import API_BASE as BASE
 PASSWORD = "ChangeMe123!"
 
 # Hyderabad area dummy coordinates

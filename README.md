@@ -33,28 +33,36 @@ This runs: `uv sync` → `alembic upgrade head` → seed admin + executives.
 
 ## 3. Start API
 
-Use port **8080** so the Flutter app (`AppConfig.baseUrl`) can reach the API.
+From the **repo root** (matches how you normally run it):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/dev.ps1
+uv run --directory backend fastapi dev
 ```
 
-Or manually:
+Or:
 
 ```powershell
-uv run fastapi dev --port 8080
+fastapi run backend
 ```
 
-Health check: http://127.0.0.1:8080/health
+From `backend/`:
 
-If requests return **404** for new routes, an older API process may still be bound to port 8080. Stop it and restart the dev server.
+```powershell
+uv run fastapi dev
+```
+
+Default URL: **http://127.0.0.1:8000** (FastAPI CLI default — same as Flutter `AppConfig.apiPort`).
+
+Health check: http://127.0.0.1:8000/health
+
+**Single port:** use **8000** only. If an old API is still on 8080, stop it or Flutter will hit stale data.
 
 ## 4. Flutter app
 
-The app defaults to `http://127.0.0.1:8080` (web/desktop). Override at build time if needed:
+The app defaults to `http://127.0.0.1:8000` (web/desktop). Override at build time if needed:
 
-- **Android emulator:** `http://10.0.2.2:8080`
-- **Physical device (same Wi‑Fi):** `http://<your-pc-ip>:8080` via `--dart-define=API_BASE_URL=...`
+- **Android emulator:** `http://10.0.2.2:8000`
+- **Physical device (same Wi‑Fi):** `http://<your-pc-ip>:8000` via `--dart-define=API_BASE_URL=...`
 
 Set `useMockData = false` for live API.
 

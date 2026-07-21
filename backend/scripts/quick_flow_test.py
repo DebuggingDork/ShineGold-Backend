@@ -1,10 +1,13 @@
 """Quick manual flow test for proximity + visit form."""
+import sys
 import uuid
 from datetime import date, timedelta
+from pathlib import Path
 
 import httpx
 
-BASE = "http://127.0.0.1:8011"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from api_base import API_BASE as BASE
 PWD = "ChangeMe123!"
 
 

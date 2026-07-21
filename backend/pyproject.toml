@@ -28,4 +28,6 @@ dev = [
 ]
 
 [tool.fastapi]
-port = 8080
+# Used by scripts/api_base.py. FastAPI CLI defaults to port 8000 unless you pass --port or set PORT.
+entrypoint = "app.main:app"
+port = 8000

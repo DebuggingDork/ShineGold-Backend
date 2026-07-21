@@ -1,9 +1,13 @@
 """Check visit history returned by farm detail API for recently visited farms."""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import httpx
 
-BASE = "http://127.0.0.1:8080"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from api_base import API_BASE as BASE
 
 
 def main() -> None:

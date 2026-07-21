@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 import httpx
 
-BASE = "http://127.0.0.1:8011"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from api_base import API_BASE as BASE
 EXEC_ID = "EXEC001"
 ADMIN_ID = "ADMIN001"
 PASSWORD = "ChangeMe123!"

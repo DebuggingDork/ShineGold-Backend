@@ -9,10 +9,10 @@ import httpx
 from sqlalchemy import text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from api_base import API_BASE as BASE
 from app.db.session import AsyncSessionLocal
-
-BASE = "http://127.0.0.1:8011"
 PASSWORD = "ChangeMe123!"
 
 
