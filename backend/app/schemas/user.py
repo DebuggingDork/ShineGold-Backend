@@ -116,6 +116,9 @@ class UserAssignedFarmItem(BaseModel):
     farm_id: uuid.UUID
     farm_name: str
     status: FarmStatus
+    last_visited: datetime | None = None
+    visit_cooldown_days: int
+    next_visit_available_at: datetime | None = None
 
 
 class UserDetailOut(BaseModel):

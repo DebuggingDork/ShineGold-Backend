@@ -105,6 +105,8 @@ class FarmListItem(BaseModel):
     crop: str
     total_acres: float
     status: FarmStatus
+    visit_cooldown_days: int
+    next_visit_available_at: datetime | None = None
     onboarded_by: ExecutiveSummary | None = None
     assigned_executive_id: uuid.UUID | None = None
     assigned_executive_name: str | None = None
@@ -173,6 +175,8 @@ class FarmDetailOut(BaseModel):
     farmer: FarmerOut | None = None
     photos: list[str] | None = None
     status: FarmStatus
+    visit_cooldown_days: int
+    next_visit_available_at: datetime | None = None
     visit_logs: list[VisitLogItem] = []
 
     @computed_field

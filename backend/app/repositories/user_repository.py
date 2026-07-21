@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,7 @@ from app.models.farm import Farm
 from app.models.farm_executive_assignment import FarmExecutiveAssignment
 from app.models.user import User
 from app.models.visit import Visit
+from app.services.farm_visit_service import FarmVisitService
 from app.schemas.user import (
     UserAssignedFarmItem,
     UserDetailOut,
@@ -208,9 +210,28 @@ class UserRepository:
         )
         farms = list(farms_result.scalars().all())
 
+        last_visited_by_farm: dict[uuid.UUID, datetime] = {}
+        if farms:
+            farm_ids = [farm.id for farm in farms]
+            last_visit_result = await self.db.execute(
+                select(Visit.farm_id, func.max(Visit.checkout_time))
+                .where(
+                    Visit.farm_id.in_(farm_ids),
+                    Visit.status == VisitStatus.COMPLETED,
+                )
+                .group_by(Visit.farm_id)
+            )
+            last_visited_by_farm = {row[0]: row[1] for row in last_visit_result.all()}
+
         stats = await self.get_user_stats(user_id)
 
-        return UserRepository.to_detail(executive, visits, farms, stats)
+        return UserRepository.to_detail(
+            executive,
+            visits,
+            farms,
+            stats,
+            last_visited_by_farm=last_visited_by_farm,
+        )
 
     @staticmethod
     def to_detail(
@@ -218,6 +239,8 @@ class UserRepository:
         visits: list[Visit],
         farms: list[Farm],
         stats: UserStats,
+        *,
+        last_visited_by_farm: dict[uuid.UUID, datetime] | None = None,
     ) -> UserDetailOut:
         visit_history: list[UserVisitHistoryItem] = []
         for visit in visits:
@@ -231,14 +254,19 @@ class UserRepository:
                 )
             )
 
-        assigned_farms = [
-            UserAssignedFarmItem(
-                farm_id=farm.id,
-                farm_name=farm.name,
-                status=farm.status,
+        last_visited_map = last_visited_by_farm or {}
+        assigned_farms = []
+        for farm in farms:
+            last_visited = last_visited_map.get(farm.id)
+            visit_fields = FarmVisitService.visit_response_fields(farm.status, last_visited)
+            assigned_farms.append(
+                UserAssignedFarmItem(
+                    farm_id=farm.id,
+                    farm_name=farm.name,
+                    last_visited=last_visited,
+                    **visit_fields,
+                )
             )
-            for farm in farms
-        ]
 
         return UserDetailOut(
             id=executive.id,

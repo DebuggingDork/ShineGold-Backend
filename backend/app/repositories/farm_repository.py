@@ -490,6 +490,7 @@ class FarmRepository:
             lng=farm.location_lng,
             address=farm.location_address,
         )
+        visit_fields = FarmVisitService.visit_response_fields(farm.status, last_visited)
 
         return {
             "id": farm.id,
@@ -505,7 +506,7 @@ class FarmRepository:
             "harvest_type": farm.harvest_type,
             "crop": farm.crop,
             "total_acres": farm.total_acres,
-            "status": FarmVisitService.effective_farm_status(farm.status, last_visited),
+            **visit_fields,
             "onboarded_by": onboarded_by,
             "assigned_executives": assigned_executives,
             "assigned_executive_id": primary_executive.id if primary_executive else None,
@@ -534,6 +535,7 @@ class FarmRepository:
         last_visited = None
         if completed_visits:
             last_visited = completed_visits[0].checkout_time or completed_visits[0].checkin_time
+        visit_fields = FarmVisitService.visit_response_fields(farm.status, last_visited)
         for visit in completed_visits:
             visit_date = visit.checkout_time or visit.checkin_time
             visit_logs.append(
@@ -568,6 +570,6 @@ class FarmRepository:
             assigned_executives=assigned_executives,
             farmer=farmer,
             photos=farm.photos,
-            status=FarmVisitService.effective_farm_status(farm.status, last_visited),
+            **visit_fields,
             visit_logs=visit_logs,
         )
