@@ -458,6 +458,12 @@ class FarmRepository:
         return list(farm.executive_assignments or [])
 
     @staticmethod
+    def _loaded_onboarded_by_user(farm: Farm):
+        if "onboarded_by_user" in orm_inspect(farm).unloaded:
+            return None
+        return farm.onboarded_by_user
+
+    @staticmethod
     def to_list_item(
         farm: Farm, distance_km: float | None, last_visited: datetime | None
     ) -> dict:
@@ -480,10 +486,11 @@ class FarmRepository:
         ]
         primary_executive = assigned_executives[0] if assigned_executives else None
         onboarded_by = None
-        if farm.onboarded_by_user is not None:
+        onboarded_by_user = FarmRepository._loaded_onboarded_by_user(farm)
+        if onboarded_by_user is not None:
             onboarded_by = ExecutiveSummary(
-                id=farm.onboarded_by_user.id,
-                name=farm.onboarded_by_user.name,
+                id=onboarded_by_user.id,
+                name=onboarded_by_user.name,
             )
         location = FarmLocation(
             lat=farm.location_lat,
