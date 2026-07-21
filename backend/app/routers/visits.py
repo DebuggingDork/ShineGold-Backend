@@ -5,13 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db, require_field_operator
-from app.models.enums import UserRole, VisitStatus
+from app.models.enums import FarmStatus, UserRole, VisitStatus
 from app.models.user import User
 from app.models.visit import Visit
 from app.repositories.farm_repository import FarmRepository
 from app.core.http import raise_bad_request
 from app.repositories.visit_repository import VisitRepository
 from app.services.farm_assignment_service import FarmAssignmentService
+from app.services.farm_visit_service import FarmVisitService
 from app.services.visit_form_service import VisitFormService, VisitFormServiceError
 from app.schemas.common import PaginatedResponse
 from app.schemas.visit import (
@@ -63,6 +64,19 @@ async def checkin(
         )
 
     visit_repo = VisitRepository(db)
+    latest_visit = await visit_repo.get_latest_completed_for_farm(farm.id)
+    last_visited = latest_visit.checkout_time if latest_visit is not None else None
+    if FarmVisitService.is_in_visit_cooldown(farm.status, last_visited):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=FarmVisitService.cooldown_message(),
+        )
+    if farm.status not in (FarmStatus.PENDING_VISIT, FarmStatus.VISITED):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This farm is not available for a visit.",
+        )
+
     existing = await visit_repo.get_in_progress_for_executive(current_user.id)
     if existing is not None:
         raise HTTPException(

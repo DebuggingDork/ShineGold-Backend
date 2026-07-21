@@ -1,13 +1,15 @@
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.enums import FarmStatus, UserRole, VisitStatus
 from app.models.farm import Farm, Farmer
 from app.models.farm_executive_assignment import FarmExecutiveAssignment
 from app.models.user import User
 from app.models.visit import Visit
+from app.services.farm_visit_service import FarmVisitService
 from app.schemas.dashboard import (
     AdminDashboardOut,
     ExecutiveDashboardOut,
@@ -80,6 +82,19 @@ class DashboardRepository:
 
     async def get_executive_stats(self, executive: User) -> ExecutiveDashboardOut:
         today = datetime.now(timezone.utc).date()
+        cooldown_cutoff = datetime.now(timezone.utc) - timedelta(
+            days=settings.FARM_VISIT_COOLDOWN_DAYS
+        )
+
+        last_visit_subq = (
+            select(
+                Visit.farm_id.label("farm_id"),
+                func.max(Visit.checkout_time).label("last_visited"),
+            )
+            .where(Visit.status == VisitStatus.COMPLETED)
+            .group_by(Visit.farm_id)
+            .subquery()
+        )
 
         pending_result = await self.db.execute(
             select(func.count(func.distinct(Farm.id)))
@@ -88,9 +103,19 @@ class DashboardRepository:
                 FarmExecutiveAssignment,
                 FarmExecutiveAssignment.farm_id == Farm.id,
             )
+            .outerjoin(last_visit_subq, last_visit_subq.c.farm_id == Farm.id)
             .where(
                 FarmExecutiveAssignment.executive_id == executive.id,
-                Farm.status == FarmStatus.PENDING_VISIT,
+                or_(
+                    Farm.status == FarmStatus.PENDING_VISIT,
+                    and_(
+                        Farm.status == FarmStatus.VISITED,
+                        or_(
+                            last_visit_subq.c.last_visited.is_(None),
+                            last_visit_subq.c.last_visited <= cooldown_cutoff,
+                        ),
+                    ),
+                ),
             )
         )
         pending_farms_count = pending_result.scalar_one()
@@ -127,6 +152,21 @@ class DashboardRepository:
         )
         onboarded_farms = list(onboarded_result.scalars().all())
 
+        onboarded_last_visited: dict = {}
+        if onboarded_farms:
+            onboarded_ids = [farm.id for farm in onboarded_farms]
+            onboarded_visit_result = await self.db.execute(
+                select(Visit.farm_id, func.max(Visit.checkout_time))
+                .where(
+                    Visit.farm_id.in_(onboarded_ids),
+                    Visit.status == VisitStatus.COMPLETED,
+                )
+                .group_by(Visit.farm_id)
+            )
+            onboarded_last_visited = {
+                row[0]: row[1] for row in onboarded_visit_result.all()
+            }
+
         onboarded_acres = round(
             sum(farm.total_acres for farm in onboarded_farms),
             2,
@@ -154,7 +194,10 @@ class DashboardRepository:
                     farm_name=farm.name,
                     crop=farm.crop,
                     total_acres=farm.total_acres,
-                    status=farm.status.value,
+                    status=FarmVisitService.effective_farm_status(
+                        farm.status,
+                        onboarded_last_visited.get(farm.id),
+                    ).value,
                     harvest_date=farm.harvest_date,
                 )
                 for farm in onboarded_farms[:20]

@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Max distance (km) from executive home to farm for proximity-based assignment acceptance
     EXECUTIVE_ASSIGNMENT_RADIUS_KM: float = 70.0
 
+    # Days after a completed visit before the farm becomes due for another visit
+    FARM_VISIT_COOLDOWN_DAYS: int = 30
+
     # Voice notes: client auto-stops at this length; reject longer reported durations
     MAX_VOICE_NOTE_SECONDS: int = 150
     # Soft cap for visit voice uploads (~150s AAC/opus; WAV on web stays under this)

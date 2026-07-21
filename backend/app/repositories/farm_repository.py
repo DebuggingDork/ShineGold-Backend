@@ -13,6 +13,7 @@ from app.models.farm import Farm, Farmer
 from app.models.farm_executive_assignment import FarmExecutiveAssignment
 from app.models.harvest_date_history import HarvestDateHistory
 from app.models.visit import Visit
+from app.services.farm_visit_service import FarmVisitService
 from app.schemas.farm import (
     ExecutiveSummary,
     FarmCreate,
@@ -322,8 +323,13 @@ class FarmRepository:
         count_query = select(func.count(func.distinct(Farm.id)))
 
         filters = []
-        if harvest_status is not None:
+        apply_status_filter_in_python = harvest_status is not None
+        if harvest_status is not None and harvest_status not in (
+            FarmStatus.PENDING_VISIT,
+            FarmStatus.VISITED,
+        ):
             filters.append(Farm.status == harvest_status)
+            apply_status_filter_in_python = False
 
         needs_farmer_join = bool(search)
         needs_assignment_join = assigned_to is not None
@@ -357,7 +363,7 @@ class FarmRepository:
             count_query = count_query.where(and_(*filters))
 
         total_result = await self.db.execute(count_query)
-        total = total_result.scalar_one()
+        total = total_result.scalar_one() if not apply_status_filter_in_python else 0
 
         result = await self.db.execute(base_query)
         farms = list(result.scalars().unique().all())
@@ -382,6 +388,15 @@ class FarmRepository:
                     haversine_km(lat, lng, farm.location_lat, farm.location_lng), 1
                 )
             items.append((farm, distance_km, last_visited_by_farm.get(farm.id)))
+
+        if apply_status_filter_in_python:
+            items = [
+                item
+                for item in items
+                if FarmVisitService.effective_farm_status(item[0].status, item[2])
+                == harvest_status
+            ]
+            total = len(items)
 
         if sort in ("distance", "farthest"):
             if lat is None or lng is None:
@@ -490,7 +505,7 @@ class FarmRepository:
             "harvest_type": farm.harvest_type,
             "crop": farm.crop,
             "total_acres": farm.total_acres,
-            "status": farm.status,
+            "status": FarmVisitService.effective_farm_status(farm.status, last_visited),
             "onboarded_by": onboarded_by,
             "assigned_executives": assigned_executives,
             "assigned_executive_id": primary_executive.id if primary_executive else None,
@@ -516,6 +531,9 @@ class FarmRepository:
         completed_visits.sort(
             key=lambda v: v.checkout_time or v.checkin_time, reverse=True
         )
+        last_visited = None
+        if completed_visits:
+            last_visited = completed_visits[0].checkout_time or completed_visits[0].checkin_time
         for visit in completed_visits:
             visit_date = visit.checkout_time or visit.checkin_time
             visit_logs.append(
@@ -550,6 +568,6 @@ class FarmRepository:
             assigned_executives=assigned_executives,
             farmer=farmer,
             photos=farm.photos,
-            status=farm.status,
+            status=FarmVisitService.effective_farm_status(farm.status, last_visited),
             visit_logs=visit_logs,
         )
