@@ -20,6 +20,7 @@ uv run python scripts/seed_executives.py
 
 Write-Host ""
 Write-Host "Setup complete. Start API with:"
-Write-Host "  uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+Write-Host "  powershell -ExecutionPolicy Bypass -File scripts/dev.ps1"
+Write-Host "  (listens on http://127.0.0.1:8080 — matches the Flutter app default)"
 Write-Host ""
 Write-Host "Login: ADMIN001 / ChangeMe123!  or  EXEC001 / ChangeMe123!"

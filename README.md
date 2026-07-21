@@ -33,18 +33,28 @@ This runs: `uv sync` → `alembic upgrade head` → seed admin + executives.
 
 ## 3. Start API
 
+Use port **8080** so the Flutter app (`AppConfig.baseUrl`) can reach the API.
+
 ```powershell
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+powershell -ExecutionPolicy Bypass -File scripts/dev.ps1
 ```
 
-Health check: http://127.0.0.1:8000/health
+Or manually:
+
+```powershell
+uv run fastapi dev --port 8080
+```
+
+Health check: http://127.0.0.1:8080/health
+
+If requests return **404** for new routes, an older API process may still be bound to port 8080. Stop it and restart the dev server.
 
 ## 4. Flutter app
 
-Point `lib/core/config/app_config.dart` to your machine:
+The app defaults to `http://127.0.0.1:8080` (web/desktop). Override at build time if needed:
 
-- **Android emulator:** `http://10.0.2.2:8000`
-- **Physical device (same Wi‑Fi):** `http://<your-pc-ip>:8000`
+- **Android emulator:** `http://10.0.2.2:8080`
+- **Physical device (same Wi‑Fi):** `http://<your-pc-ip>:8080` via `--dart-define=API_BASE_URL=...`
 
 Set `useMockData = false` for live API.
 
