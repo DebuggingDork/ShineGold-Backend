@@ -123,12 +123,17 @@ class UserRepository:
             .select_from(Visit)
             .where(Visit.executive_id == user_id, Visit.status == VisitStatus.COMPLETED)
         )
-        farms_result = await self.db.execute(
-            select(func.count()).select_from(Farm).where(Farm.onboarded_by == user_id)
+        onboarded_result = await self.db.execute(
+            select(
+                func.count(Farm.id),
+                func.coalesce(func.sum(Farm.total_acres), 0.0),
+            ).where(Farm.onboarded_by == user_id)
         )
+        onboarded_count, onboarded_acres = onboarded_result.one()
         return UserStats(
             total_farms_visited=visits_result.scalar_one(),
-            onboarding_farms_count=farms_result.scalar_one(),
+            onboarding_farms_count=int(onboarded_count or 0),
+            onboarded_acres_total=round(float(onboarded_acres or 0), 2),
         )
 
     async def count_assigned_farms(self, executive_id: uuid.UUID) -> int:
@@ -167,6 +172,8 @@ class UserRepository:
                     "is_blocked": executive.is_blocked,
                     "total_farms_visited": stats.total_farms_visited,
                     "farms_assigned_count": assigned_count,
+                    "onboarded_farms_count": stats.onboarding_farms_count,
+                    "onboarded_acres_total": stats.onboarded_acres_total,
                 }
             )
         return items, total
@@ -201,13 +208,16 @@ class UserRepository:
         )
         farms = list(farms_result.scalars().all())
 
-        return UserRepository.to_detail(executive, visits, farms)
+        stats = await self.get_user_stats(user_id)
+
+        return UserRepository.to_detail(executive, visits, farms, stats)
 
     @staticmethod
     def to_detail(
         executive: User,
         visits: list[Visit],
         farms: list[Farm],
+        stats: UserStats,
     ) -> UserDetailOut:
         visit_history: list[UserVisitHistoryItem] = []
         for visit in visits:
@@ -240,6 +250,8 @@ class UserRepository:
             home_lat=executive.home_lat,
             home_lng=executive.home_lng,
             is_blocked=executive.is_blocked,
+            onboarded_farms_count=stats.onboarding_farms_count,
+            onboarded_acres_total=stats.onboarded_acres_total,
             visit_history=visit_history,
             assigned_farms=assigned_farms,
         )

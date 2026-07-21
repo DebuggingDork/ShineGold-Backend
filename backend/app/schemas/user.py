@@ -77,6 +77,7 @@ class UserBlockOut(BaseModel):
 class UserStats(BaseModel):
     total_farms_visited: int
     onboarding_farms_count: int
+    onboarded_acres_total: float = 0
 
 
 class UserMeOut(UserOut):
@@ -100,6 +101,8 @@ class UserListItem(BaseModel):
     is_blocked: bool
     total_farms_visited: int
     farms_assigned_count: int
+    onboarded_farms_count: int = 0
+    onboarded_acres_total: float = 0
 
 
 class UserVisitHistoryItem(BaseModel):
@@ -125,6 +128,8 @@ class UserDetailOut(BaseModel):
     home_lat: float | None = None
     home_lng: float | None = None
     is_blocked: bool
+    onboarded_farms_count: int = 0
+    onboarded_acres_total: float = 0
     visit_history: list[UserVisitHistoryItem] = []
     assigned_farms: list[UserAssignedFarmItem] = []
 
