@@ -47,6 +47,8 @@ class VisitPhotoOut(BaseModel):
 class VisitFormUpdate(BaseModel):
     photos: list[VisitPhotoIn] | None = None
     voice_note_url: str | None = None
+    # Client-reported length; rejected when above Settings.MAX_VOICE_NOTE_SECONDS
+    voice_note_duration_seconds: int | None = Field(default=None, ge=0)
     text_note: str | None = None
     mcq_answers: list[McqAnswerIn] | None = None
     form_answers: list[FormAnswerIn] | None = None

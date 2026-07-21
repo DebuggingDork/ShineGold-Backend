@@ -122,13 +122,19 @@ async def get_visit(
     if visit is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Visit not found")
 
-    if current_user.role != UserRole.SUPER_ADMIN and visit.executive_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have access to this visit",
-        )
+    if current_user.role == UserRole.SUPER_ADMIN or visit.executive_id == current_user.id:
+        return VisitRepository.to_detail(visit)
 
-    return VisitRepository.to_detail(visit)
+    # Co-assigned executives on the same farm can open the full report (photos/voice).
+    farm_repo = FarmRepository(db)
+    farm = await farm_repo.get_by_id(visit.farm_id)
+    if farm is not None and FarmRepository.is_executive_assigned(farm, current_user.id):
+        return VisitRepository.to_detail(visit)
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You do not have access to this visit",
+    )
 
 
 @router.patch("/{visit_id}/form", response_model=VisitFormResponse)
@@ -146,6 +152,25 @@ async def update_visit_form(
     update_data = payload.model_dump(exclude_unset=True)
     if not update_data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
+
+    if payload.voice_note_duration_seconds is not None:
+        from app.core.config import settings
+
+        if payload.voice_note_duration_seconds > settings.MAX_VOICE_NOTE_SECONDS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Voice note exceeds maximum of {settings.MAX_VOICE_NOTE_SECONDS} seconds"
+                ),
+            )
+
+    if payload.voice_note_url is not None:
+        url = payload.voice_note_url.strip()
+        if url and not (url.startswith("http://") or url.startswith("https://")):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="voice_note_url must be a remote http(s) URL",
+            )
 
     try:
         updated_fields = await visit_repo.update_form(visit, payload)

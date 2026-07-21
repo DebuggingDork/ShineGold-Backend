@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     # Max distance (km) from executive home to farm for proximity-based assignment acceptance
     EXECUTIVE_ASSIGNMENT_RADIUS_KM: float = 70.0
 
+    # Voice notes: client auto-stops at this length; reject longer reported durations
+    MAX_VOICE_NOTE_SECONDS: int = 150
+    # Soft cap for visit voice uploads (~150s AAC/opus; WAV on web stays under this)
+    MAX_VOICE_UPLOAD_BYTES: int = 8 * 1024 * 1024
+
     @property
     def asyncpg_connect_args(self) -> dict:
         """Supabase transaction pooler (pgbouncer) does not support prepared statements."""

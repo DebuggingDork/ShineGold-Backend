@@ -21,3 +21,6 @@ class PresignResponse(BaseModel):
     object_key: str
     public_url: str
     expires_in: int
+    # Present for visit_voice so clients stay in sync with server limit
+    max_duration_seconds: int | None = None
+    max_upload_bytes: int | None = None
