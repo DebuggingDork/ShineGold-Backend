@@ -1,6 +1,7 @@
 from app.models.user import User, PasswordResetRequest
 from app.models.farm import Farm, Farmer
 from app.models.farm_executive_assignment import FarmExecutiveAssignment
+from app.models.farmer_interaction import FarmerInteraction
 from app.models.harvest_date_history import HarvestDateHistory
 from app.models.visit import Visit, VisitPhoto, VisitMcqAnswer
 from app.models.visit_form import (
@@ -16,6 +17,7 @@ __all__ = [
     "Farm",
     "Farmer",
     "FarmExecutiveAssignment",
+    "FarmerInteraction",
     "HarvestDateHistory",
     "Visit",
     "VisitPhoto",

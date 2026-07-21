@@ -8,6 +8,7 @@ from app.routers import (
     farms,
     geo,
     harvests,
+    interactions,
     uploads,
     users,
     visit_forms,
@@ -32,6 +33,7 @@ app.include_router(visits.router)
 app.include_router(visit_forms.router)
 app.include_router(farmers.router)
 app.include_router(harvests.router)
+app.include_router(interactions.router)
 app.include_router(dashboard.router)
 app.include_router(geo.router)
 

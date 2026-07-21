@@ -39,3 +39,11 @@ class FormQuestionType(str, enum.Enum):
     TEXT = "text"
     TEXTAREA = "textarea"
     SECTION_HEADER = "section_header"
+
+
+class InteractionStatus(str, enum.Enum):
+    """Onboarding interest status for a prospective farmer conversation."""
+
+    READY_TO_ONBOARD = "ready_to_onboard"
+    TAKING_TIME = "taking_time"
+    UNCERTAIN = "uncertain"
