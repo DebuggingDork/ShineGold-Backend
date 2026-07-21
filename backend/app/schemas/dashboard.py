@@ -35,4 +35,5 @@ class ExecutiveDashboardOut(BaseModel):
     farms_visited_count: int
     pending_farms_count: int
     onboarded_farms_count: int = 0
+    onboarded_acres_total: float = 0
     onboarded_farms: list[OnboardedFarmSummary] = []

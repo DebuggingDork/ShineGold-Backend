@@ -314,6 +314,7 @@ class FarmRepository:
 
         base_query = select(Farm).options(
             selectinload(Farm.farmer),
+            selectinload(Farm.onboarded_by_user),
             selectinload(Farm.executive_assignments).selectinload(
                 FarmExecutiveAssignment.executive
             ),
@@ -463,6 +464,12 @@ class FarmRepository:
             if assignment.executive is not None
         ]
         primary_executive = assigned_executives[0] if assigned_executives else None
+        onboarded_by = None
+        if farm.onboarded_by_user is not None:
+            onboarded_by = ExecutiveSummary(
+                id=farm.onboarded_by_user.id,
+                name=farm.onboarded_by_user.name,
+            )
         location = FarmLocation(
             lat=farm.location_lat,
             lng=farm.location_lng,
@@ -482,7 +489,9 @@ class FarmRepository:
             "harvest_date": farm.harvest_date,
             "harvest_type": farm.harvest_type,
             "crop": farm.crop,
+            "total_acres": farm.total_acres,
             "status": farm.status,
+            "onboarded_by": onboarded_by,
             "assigned_executives": assigned_executives,
             "assigned_executive_id": primary_executive.id if primary_executive else None,
             "assigned_executive_name": primary_executive.name if primary_executive else None,

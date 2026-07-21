@@ -103,7 +103,9 @@ class FarmListItem(BaseModel):
     harvest_date: date
     harvest_type: str
     crop: str
+    total_acres: float
     status: FarmStatus
+    onboarded_by: ExecutiveSummary | None = None
     assigned_executive_id: uuid.UUID | None = None
     assigned_executive_name: str | None = None
     assigned_executives: list[ExecutiveSummary] = Field(default_factory=list)

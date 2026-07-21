@@ -127,6 +127,11 @@ class DashboardRepository:
         )
         onboarded_farms = list(onboarded_result.scalars().all())
 
+        onboarded_acres = round(
+            sum(farm.total_acres for farm in onboarded_farms),
+            2,
+        )
+
         return ExecutiveDashboardOut(
             greeting_name=executive.name,
             date=today,
@@ -142,6 +147,7 @@ class DashboardRepository:
             farms_visited_count=farms_visited_count,
             pending_farms_count=pending_farms_count,
             onboarded_farms_count=len(onboarded_farms),
+            onboarded_acres_total=onboarded_acres,
             onboarded_farms=[
                 OnboardedFarmSummary(
                     farm_id=farm.id,
