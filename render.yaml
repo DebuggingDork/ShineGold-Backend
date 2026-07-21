@@ -1,0 +1,53 @@
+# Render Blueprint — ShineGold API
+# https://render.com/docs/blueprint-spec
+#
+# Deploy: connect this repo in Render → New Blueprint → apply this file.
+# Or create a Web Service manually using the settings below.
+
+services:
+  - type: web
+    name: shinegold-api
+    runtime: python
+    region: singapore
+    plan: free
+    rootDir: backend
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    preDeployCommand: uv run alembic upgrade head
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_DIRECT
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: shinegold-media
+      - key: SUPABASE_DB_REGION
+        value: ap-south-1
+      - key: SUPABASE_POOLER_PREFIX
+        value: aws-1
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: EXECUTIVE_ASSIGNMENT_RADIUS_KM
+        value: "70"
+      - key: FARM_VISIT_COOLDOWN_DAYS
+        value: "30"
+      - key: MAX_VOICE_NOTE_SECONDS
+        value: "150"
+      - key: MAX_VOICE_UPLOAD_BYTES
+        value: "8388608"

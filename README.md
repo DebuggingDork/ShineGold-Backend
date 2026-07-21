@@ -1,3 +1,28 @@
+# ShineGold
+
+Field executive & admin app (Flutter) + FastAPI backend on Supabase.
+
+## Quick start (local)
+
+See [README backend setup](#shinegold-backend--local-setup) below for `.env`, migrations, and `uv run fastapi dev`.
+
+Flutter app: `cd shinegold && flutter run` (defaults to local API on port 8000).
+
+## Production deploy & APK
+
+**Full guide:** [docs/DEPLOY.md](docs/DEPLOY.md)
+
+1. **Backend on Render** — connect repo, apply `render.yaml`, set Supabase env vars, deploy.
+2. **Health cron** — ping `https://YOUR-SERVICE.onrender.com/health` every 10 min (free tier).
+3. **APK** — set Render URL in `shinegold/dart_defines/production.json`, then:
+   ```powershell
+   cd shinegold
+   powershell -ExecutionPolicy Bypass -File scripts\build_apk.ps1
+   ```
+4. Share `shinegold/build/app/outputs/flutter-apk/app-release.apk` with testers.
+
+---
+
 # ShineGold Backend — local setup
 
 ## 1. Environment
@@ -66,9 +91,11 @@ The app defaults to `http://127.0.0.1:8000` (web/desktop). Override at build tim
 
 Set `useMockData = false` for live API.
 
+**Production APK:** use `scripts/build_apk.ps1` with your Render URL — see [docs/DEPLOY.md](docs/DEPLOY.md).
+
 ## Default logins (after seed)
 
 | Role | Employee ID | Password |
 |------|-------------|----------|
-| Super admin | `ADMIN001` | `ChangeMe123!` |
+| Super admin | `ADMIN001` | `shinegold2026` |
 | Executive | `EXEC001` | `ChangeMe123!` |
