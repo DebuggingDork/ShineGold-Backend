@@ -18,8 +18,8 @@ from app.models.enums import UserRole
 from app.models.user import User
 
 EMPLOYEE_ID = "ADMIN001"
-NAME = "Super Admin"
-PASSWORD = "ChangeMe123!"
+NAME = "Prasad"
+PASSWORD = "shinegold2026"
 
 
 async def seed_admin() -> None:

@@ -26,6 +26,18 @@ class Settings(BaseSettings):
 
     # --- App ---
     ENVIRONMENT: str = "development"
+    # Comma-separated origins for CORS (empty = allow all). Mobile apps ignore CORS.
+    CORS_ORIGINS: str = ""
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.strip().lower() == "production"
+
+    @property
+    def cors_allow_origins(self) -> list[str]:
+        if not self.CORS_ORIGINS.strip():
+            return ["*"]
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
     # Max distance (km) from executive home to farm for proximity-based assignment acceptance
     EXECUTIVE_ASSIGNMENT_RADIUS_KM: float = 70.0
