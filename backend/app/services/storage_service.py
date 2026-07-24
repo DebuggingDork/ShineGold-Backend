@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from urllib.parse import urlparse
 
+import httpx
 from supabase import Client, create_client
 
 from app.core.config import settings
@@ -30,6 +31,10 @@ EXTENSION_BY_MIME = {
 
 # Signed download URLs for recovery when public bucket reads fail
 SIGNED_DOWNLOAD_EXPIRES_SECONDS = 60 * 60 * 24 * 7  # 7 days
+
+# Below this size, an "uploaded" file is almost certainly a header-only stub
+# (e.g. a bare ID3 tag with no MPEG frames) rather than real audio/image data.
+MIN_UPLOAD_BYTES = 2 * 1024
 
 
 class StorageError(Exception):
@@ -94,6 +99,30 @@ class StorageService:
         if not url:
             raise StorageError("Could not create signed download URL")
         return url
+
+    async def verify_uploaded_object(self, url: str, min_bytes: int = MIN_UPLOAD_BYTES) -> int:
+        """HEAD the uploaded object to confirm the PUT actually completed and produced
+        a plausibly non-empty file, catching stub/truncated uploads before they're
+        permanently accepted (e.g. a recording interrupted mid-flush, or a client
+        submitting the form before its own upload finished writing bytes)."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                response = await client.head(url)
+        except httpx.HTTPError as e:
+            raise StorageError(f"Could not verify uploaded file: {e}") from e
+
+        if response.status_code >= 400:
+            raise StorageError(f"Uploaded file not found ({response.status_code})")
+
+        content_length = response.headers.get("content-length")
+        if content_length is None or not content_length.isdigit():
+            raise StorageError("Uploaded file is missing a content length")
+
+        size = int(content_length)
+        if size < min_bytes:
+            raise StorageError(f"Uploaded file is too small ({size} bytes) to be valid")
+
+        return size
 
 
 storage_service = StorageService()

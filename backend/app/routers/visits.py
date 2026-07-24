@@ -13,6 +13,7 @@ from app.core.http import raise_bad_request
 from app.repositories.visit_repository import VisitRepository
 from app.services.farm_assignment_service import FarmAssignmentService
 from app.services.farm_visit_service import FarmVisitService
+from app.services.storage_service import StorageError, storage_service
 from app.services.visit_form_service import VisitFormService, VisitFormServiceError
 from app.schemas.common import PaginatedResponse
 from app.schemas.visit import (
@@ -185,6 +186,14 @@ async def update_visit_form(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="voice_note_url must be a remote http(s) URL",
             )
+        if url:
+            try:
+                await storage_service.verify_uploaded_object(url)
+            except StorageError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Voice note upload could not be verified: {e}",
+                ) from e
 
     try:
         updated_fields = await visit_repo.update_form(visit, payload)
