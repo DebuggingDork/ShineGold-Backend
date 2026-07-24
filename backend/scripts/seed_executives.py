@@ -1,8 +1,17 @@
 """
-Seed sample executive users for local development.
+Seed Shinegold executive users from Executive Details CSV.
 
-Run from backend/:
+How to run (from backend/):
     uv run python scripts/seed_executives.py
+
+Or with the project venv activated:
+    python scripts/seed_executives.py
+
+Default password for every executive:
+    ChangeMe123!
+
+Login with employee_id + password, e.g.:
+    EXEC001 / ChangeMe123!
 """
 import asyncio
 import sys
@@ -19,20 +28,35 @@ from app.models.user import User
 
 DEFAULT_PASSWORD = "ChangeMe123!"
 
+# Real executive details from Executive Details_Shinegold.csv
 SEED_EXECUTIVES: list[dict] = [
     {
         "employee_id": "EXEC001",
-        "name": "Executive One",
+        "name": "G. Muddugangappa",
         "password": DEFAULT_PASSWORD,
-        "mobile_number": "9876543210",
-        "address": "Hyderabad, Telangana",
+        "mobile_number": "9902029987",
+        "address": "Maraluru, Ramapura, Kasaba, Gowribidanur, Chikka Ballapura, 561208",
     },
     {
         "employee_id": "EXEC002",
-        "name": "Executive Two",
+        "name": "Narasimhamurthy",
         "password": DEFAULT_PASSWORD,
-        "mobile_number": "9876543211",
-        "address": "Warangal, Telangana",
+        "mobile_number": "9901451502",
+        "address": "G Bommasandr, Gowribidanur, Chikka Ballapur, 561213",
+    },
+    {
+        "employee_id": "EXEC003",
+        "name": "Pillegowda YB",
+        "password": DEFAULT_PASSWORD,
+        "mobile_number": "9742009060",
+        "address": "Yeliyur, Devanahalli, Bangalore Rural, 562110",
+    },
+    {
+        "employee_id": "EXEC004",
+        "name": "R Ranganna",
+        "password": DEFAULT_PASSWORD,
+        "mobile_number": "9740037313",
+        "address": "Subrigistar Official Building, Vinayaka Nagara, Pavagada, Tumkur, 561202",
     },
 ]
 
